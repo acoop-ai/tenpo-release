@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src data:; font-src 'none'; connect-src https://script.google.com https://script.googleusercontent.com https://oauth2.googleapis.com; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<script src="boot.js?v=c830f0154b"></script>
+<title>店舗運営/MDの辞書</title>
+<link rel="stylesheet" href="style.css?v=f9dfb371b0">
+</head>
+<body>
+<header id="bar">
+  <div class="row1">
+    <button id="back" type="button" aria-label="ひとつ前に戻る">← 戻る</button>
+    <a id="brand" href="#/">店舗運営/MDの辞書<small>V0.3（試作）</small></a>
+    <label id="modeWrap" title="本部が教えるときの見せ方に切り替える"><input id="mode" type="checkbox"> 教える</label>
+  </div>
+  <div class="row2"><input id="q" type="search" autocomplete="off" placeholder="困りごと・言葉で探す（例：値引き　スカスカ　雨）" aria-label="探す"></div>
+</header>
+<div id="notice">試作です。話題の棚と、教科書との結びつきは <b>AI の案</b>（10/5 以降に確定）。</div>
+<main id="view"></main>
+<div id="tip" role="tooltip"></div>
+<div id="lightbox" hidden><button type="button" class="lb-close" aria-label="閉じる">×</button><button type="button" class="lb-prev" aria-label="前のスライド">‹</button><figure><img alt=""><figcaption></figcaption></figure><button type="button" class="lb-next" aria-label="次のスライド">›</button></div>
+<div id="gate" class="gate" hidden>
+  <div class="gate-card" role="dialog" aria-labelledby="gate-title">
+    <div class="gate-brand" id="gate-title">店舗運営/MDの辞書</div>
+    <p class="gate-lead">店長・主任が、その場の判断に使う1冊です。<br>困りごとの言葉で探せます。</p>
+    <p class="gate-msg" id="gate-msg" aria-live="polite">確かめています…</p>
+    <div class="gate-busy" id="gate-busy" hidden><i></i></div>
+    <button type="button" class="gate-btn" id="gate-login" hidden>Google でログイン</button>
+    <p class="gate-note">会社の Google アカウントだけが入れます。<br>個人の Gmail では中身は見られません。</p>
+  </div>
+</div>
+<script src="app.js?v=684269edd2"></script>
+</body>
+</html>
