@@ -545,7 +545,7 @@ render();
 // ログインは同じタブで Google へ移って戻る方式（窓＝ポップアップの方式は、2段階認証から戻ると結果が届かない件があった）
 (() => {
   'use strict';
-  const CONFIG = {"gasUrl": "", "clientId": "1072945615483-74jadmaet56chvhkfh2cpt4ae9dvh140.apps.googleusercontent.com", "redirectUri": "https://acoop-ai.github.io/tenpo-release/"};                 // { gasUrl, clientId, redirectUri }（build.py が web/config.json から差し込む）
+  const CONFIG = {"gasUrl": "https://script.google.com/macros/s/AKfycbxrVeOFC-rlPXQUWiB8rllZ4KIkrUPcaNp87hvlCnY0jCOwKTdf-VWsAB_Wb_dOAZk/exec", "clientId": "1072945615483-74jadmaet56chvhkfh2cpt4ae9dvh140.apps.googleusercontent.com", "redirectUri": "https://acoop-ai.github.io/tenpo-release/"};                 // { gasUrl, clientId, redirectUri }（build.py が web/config.json から差し込む）
   const TOKEN_KEY = 'storeops_token_v1';         // { t: 札, exp: 期限 }。札は1時間で切れる
   const STATE_KEY = 'storeops_oauth_state_v1';   // [{ s: 合言葉, t: 出した時刻, h: ログイン前に見ていた画面 }]
   const STATE_MAX_AGE = 10 * 60 * 1000;          // 合言葉は10分・1回限り
