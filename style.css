@@ -91,6 +91,11 @@ details.more>div{padding:0 14px 12px}
 .body p{margin:.4em 0}
 .body h4{margin:1em 0 .3em;font-size:16px;color:var(--sub)}
 .body blockquote{margin:.5em 0;padding:4px 12px;border-left:4px solid var(--line);color:var(--sub)}
+/* 見出しと本文の組（スライドの「見出し → 本文」。見出しは太く少し大きく、本文はその下に少し小さく） */
+.body dl{margin:.3em 0 .6em;white-space:normal}
+.body dt{font-weight:700;font-size:17.5px;line-height:1.6;margin-top:.9em}
+.body dt:first-child{margin-top:.2em}
+.body dd{margin:.2em 0 0;padding-left:.8em;border-left:3px solid var(--accent-soft);font-size:15.5px;line-height:1.75;color:#33403a}
 .src{font-size:13px;color:var(--sub);margin-top:6px}
 .slides{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin:10px 0}
 .slides button{padding:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;cursor:zoom-in;text-align:left}
