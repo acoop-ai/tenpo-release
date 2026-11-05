@@ -1,0 +1,872 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-ZLNdaCs7Vyi5pvMAfA7XYWfb7+3gINzvaElHCf+RNFI=' 'sha256-dsOgWoexqLIeVT0a5RYN+mVaPBOqbkrcSfZyx7Z77Iw=' 'sha256-54WE49LzS4gphCxkVitSn2+X1nWPvFMZMPKn5LRC5bY='; style-src 'sha256-tWFIol0W8KDH32eHDjbTS7y9hmxpwsWBup3krOXkMLg='; media-src blob:; connect-src https://script.google.com https://script.googleusercontent.com; base-uri 'none'; object-src 'none'; form-action 'none'">
+<title>AI教材の動画</title>
+<script>// Google から戻ったアドレスの # 以降（ログインの札）を、ほかの台本より先に取り出してアドレスから消す。
+// 消さないと、履歴・画面のアドレス欄に札が残る。取り出した値は app.js が合言葉（state）と照らしてから使う
+(function () {
+  try {
+    var h = location.hash || '';
+    if (/(^#|&)(access_token|error)=/.test(h)) {
+      window.__oauthHash = h;
+      history.replaceState(null, '', location.pathname + location.search);
+    }
+  } catch (e) { /* 取り出せなくてもログイン画面から入り直せる */ }
+})();
+</script>
+<style>:root { color-scheme: light; --green:#00803c; --deep:#14503a; --ink:#1d2a22; --sub:#4d5c52; --line:#d5e2d9; --pale:#edf6f0; --warn:#8a4b00; --err:#b3261e; }
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: #f5f7f5; color: var(--ink); font: 16px/1.6 "Meiryo UI", Meiryo, "Yu Gothic UI", system-ui, sans-serif; }
+[hidden] { display: none !important; }
+button { font: inherit; cursor: pointer; }
+button:focus-visible, summary:focus-visible, .ver:focus-visible { outline: 3px solid #1669c9; outline-offset: 2px; }
+
+/* 上の帯: 名前は左上の1か所。右に、だれでログインしているかとログアウトを寄せる */
+.bar { display: flex; align-items: center; justify-content: space-between; gap: 6px 16px; min-height: 60px; padding: 6px 16px; background: #fff; border-bottom: 1px solid var(--line); }
+.bar h1 { margin: 0; font-size: 21px; font-weight: 700; color: var(--deep); white-space: nowrap; }
+.who { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 15px; color: var(--sub); }
+#account { overflow-wrap: anywhere; }
+
+.primary { min-height: 44px; padding: 8px 22px; border: 0; border-radius: 10px; background: var(--green); color: #fff; font-weight: 700; }
+.primary:hover { background: #006a32; }
+.ghost { min-height: 44px; padding: 4px 14px; border: 1px solid #7f9a8a; border-radius: 8px; background: #fff; color: var(--deep); font-size: 15px; white-space: nowrap; }
+.ghost:hover { background: var(--pale); }
+
+.page { max-width: 1500px; margin: 0 auto; padding: 16px; }
+
+/* ログインの前 */
+.gate { max-width: 560px; margin: 40px auto; padding: 24px; background: #fff; border: 1px solid var(--line); border-radius: 14px; }
+.gate-lead { margin: 0 0 8px; font-size: 18px; font-weight: 700; color: var(--deep); }
+.gate-msg { min-height: 26px; margin: 8px 0 14px; }
+.gate-msg.err { color: var(--err); font-weight: 700; }
+.gate-note { margin: 16px 0 0; font-size: 15px; color: var(--sub); }
+.gate-warn { margin: 12px 0 0; padding: 8px 12px; border-radius: 8px; background: #fff4e0; color: var(--warn); font-size: 15px; word-break: break-all; }
+
+/* 一覧と再生の場所: PC は左に一覧・右に再生（横長を使い切る）。スマホは縦に積み、再生は押した行のすぐ下へ移す */
+.room { display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.list { display: flex; flex-direction: column; gap: 10px; }
+.tip { margin: 0 2px; font-size: 16px; color: var(--ink); }
+.row { display: flex; flex-direction: column; }
+.v { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 72px; padding: 8px 12px; text-align: left; border: 1px solid #7f9a8a; border-radius: 12px; background: #fff; color: var(--ink); }
+.v:hover { border-color: var(--green); background: var(--pale); }
+.v .no { flex: 0 0 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: #dff0e5; color: var(--deep); font-weight: 700; }
+.v .tt { flex: 1 1 auto; min-width: 0; }
+.v b { display: block; font-size: 17px; color: var(--deep); }
+.v small { display: block; font-size: 15px; color: var(--sub); }
+.v .go { flex: 0 0 auto; color: var(--green); font-size: 18px; }
+.v[aria-current="true"] { background: var(--green); border-color: var(--green); color: #fff; }
+.v[aria-current="true"] b, .v[aria-current="true"] small, .v[aria-current="true"] .go { color: #fff; }
+.v[aria-current="true"] .no { background: #fff; color: var(--green); }
+.v[aria-current="true"] .spin { border-color: #ffffff66; border-top-color: #fff; }
+
+/* 止まったときの知らせ（待っている間の知らせは、押した札の中に出す＝下の札が動かない） */
+.st { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; padding: 8px 10px; border-radius: 8px; background: var(--pale); font-size: 16px; }
+.st.err { background: #fdecea; color: var(--err); font-weight: 700; }
+.spin { display: inline-block; width: 16px; height: 16px; margin-right: 6px; vertical-align: -3px; border: 3px solid #b9d6c4; border-top-color: var(--green); border-radius: 50%; animation: spin .9s linear infinite; }
+.spin.big { width: 40px; height: 40px; margin: 0 0 10px; border-width: 5px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation-duration: 3s; } }
+
+.stage { min-width: 0; }
+.screen { position: relative; width: 100%; aspect-ratio: 16 / 9; max-height: calc(100vh - 190px); }
+video { display: block; width: 100%; height: 100%; border-radius: 12px; background: #101713; }
+.cover { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; border: 2px dashed #7f9a8a; border-radius: 12px; background: #fff; color: var(--ink); font-size: 17px; text-align: center; }
+.below { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-top: 8px; font-size: 15px; color: var(--sub); }
+.got { display: inline-flex; align-items: center; gap: 8px; }
+.got progress { appearance: none; width: 160px; height: 12px; border: 1px solid #5f7a69; border-radius: 6px; background: #fff; overflow: hidden; }
+.got progress::-webkit-progress-bar { background: #fff; }
+.got progress::-webkit-progress-value { background: var(--green); }
+.got progress::-moz-progress-bar { background: var(--green); }
+.tools { display: inline-flex; gap: 8px; margin-left: auto; }
+
+.foot { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px 24px; max-width: 1500px; margin: 0 auto; padding: 0 16px 20px; font-size: 15px; color: var(--sub); }
+.help summary { cursor: pointer; color: var(--deep); min-height: 28px; }
+.help ol { margin: 6px 0 0; padding-left: 22px; max-width: 760px; }
+.ver { user-select: none; cursor: default; font-size: 14px; color: var(--sub); }
+
+/* 待ち時間の記録 */
+.perf { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 16px; background: #0007; }
+.perf-card { width: min(1080px, 100%); max-height: 90vh; overflow: auto; padding: 16px; border-radius: 12px; background: #fff; }
+.perf-head { display: flex; align-items: center; justify-content: space-between; }
+.perf-head h2 { margin: 0; font-size: 18px; color: var(--deep); }
+.perf-note { margin: 8px 0; font-size: 14px; color: var(--sub); }
+.perf-wrap { overflow-x: auto; }
+#perf-table { border-collapse: collapse; font-size: 14px; white-space: nowrap; }
+#perf-table th, #perf-table td { padding: 4px 8px; border: 1px solid var(--line); text-align: right; }
+#perf-table th:first-child, #perf-table td:first-child { text-align: left; }
+#perf-table thead th { background: var(--pale); white-space: normal; min-width: 72px; }
+.perf-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+@media (max-width: 859px) {
+  .room { grid-template-columns: minmax(0, 1fr); }
+  .page { padding: 12px; }
+  .gate { margin: 16px auto; padding: 18px; }
+  .bar { flex-wrap: wrap; }
+  .bar h1 { font-size: 19px; }
+  .who { width: 100%; justify-content: space-between; }
+  .row .stage { margin-top: 8px; }
+  .stage.idle { display: none; }
+  .screen { max-height: none; }
+  video::cue { font-size: 16px; }
+}
+@media print { .bar .who, .foot, .tools { display: none; } }
+</style>
+<script>window.AI_GUIDE_CONFIG={"clientId":"1072945615483-74jadmaet56chvhkfh2cpt4ae9dvh140.apps.googleusercontent.com","apiUrl":"https://script.google.com/macros/s/AKfycbxrVeOFC-rlPXQUWiB8rllZ4KIkrUPcaNp87hvlCnY0jCOwKTdf-VWsAB_Wb_dOAZk/exec","redirectUri":"https://acoop-ai.github.io/tenpo-release/"};</script>
+</head>
+<body>
+<header class="bar">
+  <h1>AI教材の動画</h1>
+  <div class="who" id="who" hidden>
+    <span id="account"></span>
+    <button id="logout" class="ghost" type="button">ログアウト</button>
+  </div>
+</header>
+
+<main class="page">
+  <section id="gate" class="gate" aria-labelledby="gate-lead">
+    <p id="gate-lead" class="gate-lead">会社の Google アカウントでログインすると、動画を見られます。</p>
+    <p id="gate-msg" class="gate-msg" role="status" aria-live="polite"><span class="spin" aria-hidden="true"></span>確かめています…</p>
+    <button id="login" class="primary" type="button" hidden>Google でログイン</button>
+    <p id="gate-note" class="gate-note">個人の Gmail では見られません。パスワードは Google の画面（accounts.google.com）にだけ入れてください。</p>
+    <p id="inapp" class="gate-warn" hidden></p>
+  </section>
+
+  <section id="room" class="room" hidden>
+    <nav class="list" aria-label="動画の一覧">
+      <p class="tip">見たい動画を押してください。<br>はじめての方は 1 から順に。</p>
+      <div class="row" data-row="BEGINNER">
+        <button class="v" type="button" data-video="BEGINNER"><span class="no" aria-hidden="true">1</span><span class="tt"><b>はじめてのAI</b><small data-hint="BEGINNER" aria-live="polite">約7分</small></span><span class="go" aria-hidden="true">▶</span></button>
+        <div class="st" data-status="BEGINNER" role="status" aria-live="polite" hidden></div>
+      </div>
+      <div class="row" data-row="SAFETY">
+        <button class="v" type="button" data-video="SAFETY"><span class="no" aria-hidden="true">2</span><span class="tt"><b>AI利活用 安全ガイド</b><small data-hint="SAFETY" aria-live="polite">約11分</small></span><span class="go" aria-hidden="true">▶</span></button>
+        <div class="st" data-status="SAFETY" role="status" aria-live="polite" hidden></div>
+      </div>
+    </nav>
+
+    <div id="stage" class="stage idle">
+      <div class="screen">
+        <video id="video" controls playsinline hidden></video>
+        <div id="cover" class="cover"><span id="cover-spin" class="spin big" aria-hidden="true" hidden></span><span id="cover-text">動画を押すと、ここで再生します</span></div>
+      </div>
+      <div id="below" class="below" hidden>
+        <span id="got" class="got" hidden><label for="fill">読み込み済み</label> <progress id="fill" max="100" value="0"></progress> <span id="fill-text">0%</span></span>
+        <span class="tools">
+          <button id="subs" class="ghost" type="button" hidden>字幕を消す</button>
+          <button id="close" class="ghost" type="button">閉じる</button>
+        </span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <details class="help">
+    <summary>使い方と、うまく見られないとき</summary>
+    <ol>
+      <li>見たい動画を押します。押した所に「読み込み中…」と出て、数秒で再生が始まります。</li>
+      <li>字幕は動画の下のボタンで消せます。止める・進める・全画面は、動画の中のボタンで行います。スマホで字幕が小さいときは全画面にしてください。</li>
+      <li>進まないときは、出てきた「やり直す」を押してください。止まった所から続きます。</li>
+      <li>「見られません」と出たら、会社のアカウントを選び直してください。</li>
+    </ol>
+  </details>
+  <span id="ver" class="ver" tabindex="0" role="button" title="長押し（または5回続けて押す）で、待ち時間の記録"></span>
+</footer>
+
+<div id="perf" class="perf" hidden role="dialog" aria-modal="true" aria-labelledby="perf-title">
+  <div class="perf-card">
+    <div class="perf-head"><h2 id="perf-title">待ち時間の記録</h2><button id="perf-close" class="ghost" type="button" aria-label="閉じる">×</button></div>
+    <p class="perf-note">調べるときの画面です。数字の意味は分からなくて大丈夫です。この画面を開いてからの操作ごとの時間で（新しい 200 件）、この端末のメモリだけにあり、閉じると消えます（中身やメールは持っていません）。</p>
+    <p id="perf-builds" class="perf-note"></p>
+    <div class="perf-wrap"><table id="perf-table"></table></div>
+    <p id="perf-counts" class="perf-note"></p>
+    <div class="perf-actions">
+      <button id="perf-copy" class="ghost" type="button">コピーする</button>
+    </div>
+    <p id="perf-burst-out" class="perf-note" role="status"></p>
+  </div>
+</div>
+<script>// 画面「AI教材の動画」: ログインを確かめてから、窓口（辞書の GAS の動画の口）が返す小分けをつないで再生する。
+// 信頼境界:
+//   - この画面（GitHub Pages・公開）に動画・ドライブの番号・会社のドメイン・鍵を置かない
+//   - だれが見られるかは窓口が毎回決める。画面の判断では開けない
+//   - 戻りのアドレスの # 以降は誰でも作れる値。この端末で出した合言葉（state）と一致したときだけ使う
+//   - 札は、このタブの中だけ（sessionStorage）。タブを閉じる・ログアウトで消える。Google 側の許可は取り消さない
+//     （取り消すと、同じアカウントの全端末と、同じログイン設定を使う他のシステムまで落ちるため）
+// ログインは辞書と同じ「同じタブで Google へ移って戻る」方式。戻り先は辞書のアドレスで、辞書の boot.js が
+//   合言葉の頭（video-）を見て、札に触らずこの画面へ渡す（戻り先の登録を増やさないため）。
+(function () {
+  'use strict';
+  var WEB_BUILD = 'video-web-2026-11-05a';
+  var cfg = window.AI_GUIDE_CONFIG || {};
+  var TITLES = { BEGINNER: 'はじめてのAI', SAFETY: 'AI利活用 安全ガイド' };
+  var TOKEN_KEY = 'video_token_v1';            // { t: 札, exp: 期限 }
+  var STATE_KEY = 'video_oauth_state_v1';      // [{ s: 合言葉, t: 出した時刻, v: 動画, at: 位置 }]
+  var STATE_MAX_AGE = 10 * 60 * 1000;          // 合言葉は10分・1回限り
+  var AHEAD_SECONDS = 120;                     // 先読みは約2分先まで（窓口の同時の数を減らす）
+  var SLOW_MS = 8000;                          // ここを超えたら「時間がかかっています」
+  var STOP_MS = 30000;                         // ここを超えたら止めて、やり直しのボタン
+  var FIRST_REPLY_BYTES = 2800000;             // 最初の返事のおおよその大きさ（割合を出すためだけ）
+  var WHOLE_PARALLEL = 3;                      // 古い iPhone: 受け取り終えてから再生するときに並べる本数
+  var RECHECK_MS = 60000;                      // 入れた小分けが無いと見えても、この間は取り直さない
+  var SLOW_TEXT = '時間がかかっています。もう少しお待ちください…';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var els = {
+    gate: $('gate'), gateMsg: $('gate-msg'), gateNote: $('gate-note'), login: $('login'), inapp: $('inapp'), who: $('who'), account: $('account'), logout: $('logout'),
+    room: $('room'), stage: $('stage'), cover: $('cover'), coverSpin: $('cover-spin'), coverText: $('cover-text'), video: $('video'), below: $('below'), got: $('got'), fill: $('fill'), fillText: $('fill-text'), subs: $('subs'), close: $('close'), ver: $('ver'),
+    perf: $('perf'), perfBuilds: $('perf-builds'), perfTable: $('perf-table'), perfCounts: $('perf-counts'), perfOut: $('perf-burst-out')
+  };
+  var video = els.video;
+
+  // ── 端末の覚え（このタブの中だけ）
+  var memo = {};
+  var store = {
+    get: function (k) { try { var v = sessionStorage.getItem(k); return v === null ? (memo[k] || null) : JSON.parse(v); } catch (e) { return memo[k] || null; } },
+    set: function (k, v) { memo[k] = v; try { sessionStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* 覚えられなくても今は使える */ } },
+    del: function (k) { delete memo[k]; try { sessionStorage.removeItem(k); } catch (e) { /* 同上 */ } }
+  };
+  function token() {
+    var tok = store.get(TOKEN_KEY);
+    return tok && tok.t && tok.exp > Date.now() ? tok.t : '';
+  }
+
+  // ── 速さの記録（画面の中の時間）。中身（メール・動画の中身）は持たない。操作の名前とミリ秒・サーバーの ms・返事の大きさだけ
+  var perfLog = [];
+  var perfCount = { network: 0, retry: 0, stall: 0 };
+  var SERVER_PARTS = [['auth', 'ログインの確かめ'], ['cat', '一覧'], ['read', 'ドライブを読む'], ['log', '記録を書く']];
+  var PERF_LABELS = { login: 'ログイン（押してから一覧まで・人の操作を含む）', verify: 'ログインの確かめ（戻ってから一覧まで）', open: '押してから再生が始まるまで', 'open:2': '2本目を押してから再生が始まるまで', stall: '再生中に待った時間', whole: '読み込み終えるまで（古い iPhone の形）', 'api:videoVerify': '通信: ログインの確かめ', 'api:videoOpen': '通信: 最初の小分け', 'api:videoChunk': '通信: 次の小分け' };
+  var PERF_ORDER = ['login', 'verify', 'open', 'open:2', 'stall', 'whole', 'api:videoVerify', 'api:videoOpen', 'api:videoChunk'];
+  function perfNote(what, t0, note, extra) {
+    var row = { what: what, ms: Math.round(performance.now() - t0), note: note || '' };
+    if (extra && extra.server && typeof extra.server === 'object') {
+      row.server = Number(extra.server.t) || 0; row.parts = {};
+      SERVER_PARTS.forEach(function (p) { var v = extra.server[p[0]]; if (typeof v === 'number' && isFinite(v)) row.parts[p[0]] = v; });
+    }
+    if (extra && isFinite(extra.kb)) row.kb = extra.kb;
+    perfLog.push(row); if (perfLog.length > 200) perfLog.shift();
+  }
+  function median(list) { var a = list.slice().sort(function (x, y) { return x - y; }); var n = a.length; return n ? (n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2) : 0; }
+  function perfSummary() {
+    var groups = {};
+    perfLog.forEach(function (r) { (groups[r.what] = groups[r.what] || []).push(r); });
+    return Object.keys(groups).sort(function (a, b) { var ia = PERF_ORDER.indexOf(a), ib = PERF_ORDER.indexOf(b); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); }).map(function (k) {
+      var rows = groups[k], ms = rows.map(function (r) { return r.ms; }), last = rows[rows.length - 1];
+      var srv = rows.filter(function (r) { return typeof r.server === 'number'; }), parts = {};
+      SERVER_PARTS.forEach(function (p) { var v = srv.map(function (r) { return r.parts && r.parts[p[0]]; }).filter(function (x) { return typeof x === 'number'; }); parts[p[0]] = v.length ? median(v) : null; });
+      return { what: k, label: PERF_LABELS[k] || k, n: rows.length, last: last.ms, median: median(ms), max: Math.max.apply(null, ms), server: srv.length ? median(srv.map(function (r) { return r.server; })) : null, parts: parts, kb: isFinite(last.kb) ? last.kb : null, errors: rows.filter(function (r) { return r.note; }).length };
+    });
+  }
+  function secText(ms) { return ms == null ? '—' : (ms / 1000).toFixed(ms < 10000 ? 2 : 1); }
+  var PERF_HEAD = ['操作', '回数', '最後（秒）', '中央値（秒）', 'いちばん遅い（秒）', 'サーバーの中・全体（秒）'].concat(SERVER_PARTS.map(function (p) { return 'うち ' + p[1] + '（秒）'; }), ['返事（KB）']);
+  function perfCells(x) { return [x.label + (x.errors ? '（断り・失敗 ' + x.errors + '）' : ''), String(x.n), secText(x.last), secText(x.median), secText(x.max), secText(x.server)].concat(SERVER_PARTS.map(function (p) { return secText(x.parts[p[0]]); }), [x.kb == null ? '—' : String(x.kb)]); }
+  function perfCountsText() { return '通信の失敗 ' + perfCount.network + ' 回・送り直し ' + perfCount.retry + ' 回・再生中に待った ' + perfCount.stall + ' 回'; }
+  function perfText() {
+    return ['AI教材の動画 待ち時間の記録（' + WEB_BUILD + '・' + new Date().toLocaleString('ja-JP') + '）', PERF_HEAD.join('\t')]
+      .concat(perfSummary().map(function (x) { return perfCells(x).join('\t'); }), [perfCountsText()]).join('\n');
+  }
+  window.__videoPerfTable = function () { return perfSummary(); };   // 試験の画面と、公開の後の計測で読む（中身は操作の名前とミリ秒だけ）
+  window.__videoPerfText = function () { return perfText(); };
+
+  function showPerf() {
+    els.perf.hidden = false;
+    var table = els.perfTable;
+    table.textContent = '';
+    var thead = document.createElement('thead'), tr = document.createElement('tr');
+    PERF_HEAD.forEach(function (t) { var th = document.createElement('th'); th.textContent = t; th.scope = 'col'; tr.appendChild(th); });
+    thead.appendChild(tr); table.appendChild(thead);
+    var tbody = document.createElement('tbody'), rows = perfSummary();
+    if (!rows.length) { var e = document.createElement('tr'), d = document.createElement('td'); d.colSpan = PERF_HEAD.length; d.textContent = 'まだ記録がありません。'; e.appendChild(d); tbody.appendChild(e); }
+    rows.forEach(function (r) { var line = document.createElement('tr'); perfCells(r).forEach(function (t) { var td = document.createElement('td'); td.textContent = t; line.appendChild(td); }); tbody.appendChild(line); });
+    table.appendChild(tbody);
+    els.perfCounts.textContent = perfCountsText();
+  }
+  (function () {
+    var node = els.ver, timer = 0, clicks = 0, clickTimer = 0;
+    function stop() { clearTimeout(timer); timer = 0; }
+    node.addEventListener('pointerdown', function () { stop(); timer = setTimeout(function () { timer = 0; showPerf(); }, 700); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (ev) { node.addEventListener(ev, stop); });
+    node.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    node.addEventListener('click', function () { clicks++; clearTimeout(clickTimer); clickTimer = setTimeout(function () { clicks = 0; }, 1500); if (clicks >= 5) { clicks = 0; showPerf(); } });
+    node.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showPerf(); } });
+    $('perf-close').addEventListener('click', function () { els.perf.hidden = true; });
+    els.perf.addEventListener('click', function (e) { if (e.target === els.perf) els.perf.hidden = true; });
+    $('perf-copy').addEventListener('click', function () {
+      try { navigator.clipboard.writeText(perfText()).then(function () { els.perfOut.textContent = '写しました。貼り付けて送れます。'; }, function () { els.perfOut.textContent = '写せませんでした。'; }); } catch (e) { els.perfOut.textContent = '写せませんでした。'; }
+    });
+  })();
+
+  // ── 窓口を呼ぶ
+  function ApiError(message, kind) { this.message = message; this.kind = kind; }
+  function readBody(res, onBytes) {
+    if (!onBytes || !res.body || !res.body.getReader) return res.text();
+    var reader = res.body.getReader(), decoder = new TextDecoder(), parts = [], got = 0;
+    return (function next() {
+      return reader.read().then(function (r) {
+        if (r.done) { parts.push(decoder.decode()); return parts.join(''); }
+        got += r.value.length; parts.push(decoder.decode(r.value, { stream: true })); onBytes(got);
+        return next();
+      });
+    })();
+  }
+  function api(action, extra, o) {
+    o = o || {};
+    var t0 = performance.now(), ctl = new AbortController(), timedOut = false;
+    var timer = setTimeout(function () { timedOut = true; ctl.abort(); }, o.timeout || STOP_MS);
+    var onOuter = function () { ctl.abort(); };
+    if (o.signal) { if (o.signal.aborted) ctl.abort(); else o.signal.addEventListener('abort', onOuter); }
+    var body = Object.assign({ action: action, accessToken: token() }, extra || {});
+    return fetch(cfg.apiUrl, {
+      method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },   // 事前確認（preflight）の要らない送り方
+      body: JSON.stringify(body), cache: 'no-store', credentials: 'omit', redirect: 'follow', signal: ctl.signal
+    }).then(function (res) {
+      if (!res.ok) throw new ApiError('接続できませんでした。', 'net');
+      return readBody(res, o.onBytes);
+    }).then(function (text) {
+      var data;
+      try { data = JSON.parse(text); } catch (e) { throw new ApiError('接続できませんでした。', 'net'); }
+      if (!o.quiet) perfNote('api:' + action, t0, data.ok ? '' : '断り', { server: data.ms, kb: Math.round(text.length / 1024) });
+      if (!data.ok) {
+        if (data.auth) { store.del(TOKEN_KEY); throw new ApiError(data.error || 'ログインの期限が切れました。もう一度ログインしてください。', 'auth'); }
+        // retry の印＝窓口の一時的な失敗（やり直せば通る）。無いのは、やり直しても変わらない断り
+        throw new ApiError(data.error || '処理できませんでした。', data.retry ? 'net' : 'refused');
+      }
+      return data;
+    }).catch(function (e) {
+      if (e instanceof ApiError) throw e;
+      if (ctl.signal.aborted && !timedOut) throw new ApiError('止めました。', 'abort');   // 別の動画を押した・閉じた（失敗ではない）
+      if (!o.quiet) perfNote('api:' + action, t0, '失敗');
+      perfCount.network++;
+      if (timedOut) throw new ApiError('時間がかかりすぎたので止めました。', 'timeout');
+      throw new ApiError('接続できませんでした。通信の状態を確かめてください。', 'net');
+    }).finally(function () {
+      clearTimeout(timer);
+      if (o.signal) o.signal.removeEventListener('abort', onOuter);
+    });
+  }
+
+  // ── ログイン
+  function randomState() {
+    var a = new Uint8Array(16);
+    crypto.getRandomValues(a);
+    return 'video-' + Array.from(a, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+  }
+  function showGate(text, isError) {
+    els.gate.hidden = false; els.room.hidden = true; els.who.hidden = true;
+    els.gateMsg.textContent = text;
+    els.gateMsg.classList.toggle('err', !!isError);
+    els.gateNote.hidden = !!isError;   // 断りの文と同じ案内を重ねない
+    els.login.hidden = false; els.login.disabled = false;
+    els.login.textContent = 'Google でログイン';
+    els.login.onclick = function () { login(); };
+  }
+  function showBusy(text) {
+    els.gate.hidden = false; els.room.hidden = true; els.login.hidden = true;
+    els.gateMsg.classList.remove('err');
+    els.gateMsg.textContent = '';
+    var s = document.createElement('span'); s.className = 'spin'; s.setAttribute('aria-hidden', 'true');
+    els.gateMsg.appendChild(s); els.gateMsg.appendChild(document.createTextNode(text));
+  }
+  function login(resume) {
+    var now = Date.now(), s = randomState();
+    var pending = (store.get(STATE_KEY) || []).filter(function (x) { return now - x.t < STATE_MAX_AGE; }).slice(-3);
+    pending.push({ s: s, t: now, v: resume ? resume.v : '', at: resume ? resume.at : 0 });
+    store.set(STATE_KEY, pending);
+    els.login.disabled = true;
+    els.gateMsg.textContent = 'Google のログイン画面へ移ります…';
+    var q = new URLSearchParams({
+      client_id: cfg.clientId, redirect_uri: cfg.redirectUri, response_type: 'token', scope: 'openid email',
+      prompt: 'select_account',   // 会社以外のアカウントが自動で選ばれ続けないよう、毎回アカウントを選ばせる
+      state: s
+    });
+    location.assign('https://accounts.google.com/o/oauth2/v2/auth?' + q.toString());
+  }
+  function consumeRedirect() {
+    var h = window.__oauthHash;
+    window.__oauthHash = null;
+    if (!h) return null;
+    var p = new URLSearchParams(h.replace(/^#/, '')), now = Date.now(), pending = store.get(STATE_KEY) || [];
+    var hit = pending.filter(function (x) { return x.s === p.get('state') && now - x.t < STATE_MAX_AGE; })[0];
+    var rest = pending.filter(function (x) { return x !== hit && now - x.t < STATE_MAX_AGE; });
+    if (rest.length) store.set(STATE_KEY, rest); else store.del(STATE_KEY);
+    if (!hit) return { error: 'ログインを確かめられませんでした（時間がたちすぎたか、別の画面から始めたログインです）。もう一度ログインしてください。' };
+    if (p.get('error')) return { error: p.get('error') === 'access_denied' ? 'ログインが取り消されました。' : 'ログインに失敗しました。もう一度お試しください。' };
+    var t = p.get('access_token');
+    if (!t) return { error: 'ログインに失敗しました。もう一度お試しください。' };
+    var sec = Math.max(60, Number(p.get('expires_in')) || 3600);
+    store.set(TOKEN_KEY, { t: t, exp: now + (sec - 60) * 1000 });
+    return { ok: true, pressedAt: hit.t, resume: hit.v && Object.prototype.hasOwnProperty.call(TITLES, hit.v) ? { v: hit.v, at: Number(hit.at) || 0 } : null };
+  }
+  function afterLogin(back) {
+    var t0 = performance.now();
+    showBusy('ログインを確かめています…');
+    var slow = setTimeout(function () { showBusy('時間がかかっています（通信を確かめています）…'); }, SLOW_MS);
+    api('videoVerify').then(function (res) {
+      clearTimeout(slow);
+      perfNote('verify', t0);
+      if (back && back.pressedAt) perfLog.push({ what: 'login', ms: Date.now() - back.pressedAt, note: '' });
+      els.gate.hidden = true; els.room.hidden = false; els.who.hidden = false;
+      els.account.textContent = res.email + ' でログイン中';
+      els.perfBuilds.textContent = '画面 ' + WEB_BUILD + ' ／ 窓口 ' + (res.build || '不明');
+      if (back && back.resume) press(back.resume.v, back.resume.at);
+    }).catch(function (e) {
+      clearTimeout(slow);
+      if (e.kind === 'auth') { showGate(e.message, true); return; }
+      showGate(e.message + ' もう一度お試しください。', true);
+      els.login.textContent = 'もう一度';
+      els.login.onclick = function () { if (token()) afterLogin(back); else login(); };
+    });
+  }
+
+  // ── 再生: 受け取りは、いつも1本だけ動かす
+  var current = null, opened = 0, subsOn = true, subTrack = null;
+  function narrow() { return window.matchMedia('(max-width: 859px)').matches; }
+  function alive(p) { return current === p && !p.dead; }
+  function statusBox(key) { return document.querySelector('[data-status="' + key + '"]'); }
+  function clearStatus(key) { var b = statusBox(key); if (b) { b.hidden = true; b.textContent = ''; b.className = 'st'; } }
+  /** 止まったときの知らせ（押した札のすぐ下）。回復のボタンは、ログインと同じ大きな緑のボタン */
+  function setStatus(p, text, cls, button) {
+    var b = statusBox(p.key); if (!b) return;
+    clearWait(p.key);
+    b.hidden = false; b.className = 'st' + (cls ? ' ' + cls : ''); b.textContent = '';
+    var t = document.createElement('span'); t.textContent = text; b.appendChild(t);
+    if (button) { var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'primary'; btn.textContent = button.label; btn.addEventListener('click', button.onclick); b.appendChild(btn); }
+  }
+  /** 待っている間の知らせは、押した札の中（「約7分」の行）に出す。下の札が動かない。文字だけ直す（作り直すと、回る印が頭へ戻って止まって見える） */
+  function setWait(p, text) {
+    var b = document.querySelector('[data-hint="' + p.key + '"]'); if (!b) return;
+    var t = b.querySelector('.st-text');
+    if (t) { if (t.textContent !== text) t.textContent = text; return; }
+    if (!b.dataset.plain) b.dataset.plain = b.textContent;
+    b.textContent = '';
+    var s = document.createElement('span'); s.className = 'spin'; s.setAttribute('aria-hidden', 'true'); b.appendChild(s);
+    t = document.createElement('span'); t.className = 'st-text'; t.textContent = text; b.appendChild(t);
+  }
+  function clearWait(key) {
+    var b = document.querySelector('[data-hint="' + key + '"]');
+    if (b && b.dataset.plain) { b.textContent = b.dataset.plain; delete b.dataset.plain; }
+  }
+  /** 再生の場所の幕: 始まるまでは黒い面を見せず、白い枠に「いま何をしているか」を大きく出す */
+  function setCover(text, busy) { els.cover.hidden = false; els.coverSpin.hidden = !busy; els.coverText.textContent = text; }
+  function showPlayer(p) {   // 最初の絵が出せるようになった
+    els.cover.hidden = true;
+    els.got.hidden = false;
+    clearWait(p.key);
+  }
+  function markCurrent(key) {
+    document.querySelectorAll('.v').forEach(function (b) {
+      if (b.dataset.video === key) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current');
+    });
+  }
+  function placeStage(key) {
+    var row = document.querySelector('[data-row="' + key + '"]');
+    if (narrow() && row) row.appendChild(els.stage); else if (els.stage.parentNode !== els.room) els.room.appendChild(els.stage);
+  }
+  function setFill(p) {
+    var total = p.total || 1, got = 0;
+    Object.keys(p.got).forEach(function (i) { got += p.chunks[i][2]; });
+    var pct = Math.min(100, Math.round(got / total * 100));
+    els.fill.value = pct; els.fillText.textContent = pct + '%';
+  }
+
+  function stopCurrent() {
+    var p = current;
+    current = null;
+    if (!p) return;
+    p.dead = true;
+    try { p.ac.abort(); } catch (e) { /* 止まっていればよい */ }
+    clearInterval(p.watch);
+    clearStatus(p.key);
+    clearWait(p.key);
+    if (p.url) { try { URL.revokeObjectURL(p.url); } catch (e) { /* 同上 */ } }
+    p.sb = null; p.ms = null; p.parts = null;
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+    clearCues();
+  }
+  function closePlayer() {
+    stopCurrent();
+    markCurrent('');
+    video.hidden = true; els.below.hidden = true; els.got.hidden = true;
+    setCover('動画を押すと、ここで再生します', false);
+    els.stage.classList.add('idle');
+    if (els.stage.parentNode !== els.room) els.room.appendChild(els.stage);
+  }
+
+  function press(key, at) {
+    if (!Object.prototype.hasOwnProperty.call(TITLES, key)) return;
+    if (current && current.key === key && !current.dead && !current.failed) {   // 二重に押しても、受け取りは1本だけ
+      if (current.started && (video.paused || video.ended)) {   // 止めてある・終わった動画をもう一度押したら、続きを始める
+        if (video.ended) video.currentTime = 0;
+        var again = video.play(); if (again && again.catch) again.catch(function () { /* ▶ を押してもらう */ });
+      }
+      return;
+    }
+    if (!token()) { showGate('ログインの期限が切れました。もう一度ログインしてください。', true); login({ v: key, at: at || 0 }); return; }
+    stopCurrent();
+    var p = current = { key: key, t0: performance.now(), ac: new AbortController(), got: {}, appendedAt: {}, chunks: null, total: 0, at: at || 0, waitT0: performance.now(), started: false, stallT0: 0, dead: false, failed: false, ready: false, nth: ++opened, percent: 0, slow: false, quota: 0 };
+    markCurrent(key);
+    placeStage(key);
+    els.stage.classList.remove('idle');
+    video.hidden = false; els.below.hidden = false; els.got.hidden = true;
+    els.fill.value = 0; els.fillText.textContent = '0%';
+    els.subs.hidden = true;
+    setWait(p, '読み込み中… 0%');
+    setCover('読み込み中…', true);
+    p.watch = setInterval(function () { watchWait(p); }, 500);
+
+    var MS = window.ManagedMediaSource || window.MediaSource;
+    if (MS) {
+      // 押したその場で再生の準備に入る（スマホは、押した瞬間に再生を始めないと音つきで始められないため）
+      p.ms = new MS();
+      p.url = URL.createObjectURL(p.ms);
+      try { video.disableRemotePlayback = true; } catch (e) { /* 無い端末もある */ }
+      video.src = p.url;
+      var pr = video.play();
+      if (pr && pr.catch) pr.catch(function () { /* 止められたら ▶ を押してもらう（下の canplay で知らせる） */ });
+    }
+    openFirst(p, MS).catch(function (e) { failed(p, e); });
+    if (narrow()) els.stage.scrollIntoView({ block: 'nearest' });
+  }
+
+  function whenOpen(p) {
+    return new Promise(function (resolve) {
+      if (p.ms.readyState === 'open') { resolve(); return; }
+      p.ms.addEventListener('sourceopen', function () { resolve(); }, { once: true });
+    });
+  }
+  function openFirst(p, MS) {
+    var tries = 0;
+    function once() {
+      tries++;
+      return api('videoOpen', { video: p.key }, {
+        signal: p.ac.signal,
+        onBytes: function (got) {
+          if (!alive(p) || p.started) return;
+          var pct = Math.min(99, Math.round(got / FIRST_REPLY_BYTES * 100));
+          if (pct - p.percent >= 5) { p.percent = pct; showWaitText(p); }   // 細かく書き換えない（読み上げが増える）
+        }
+      }).catch(function (e) {
+        // 一時的な失敗は1回だけ自動でやり直す（時間切れと断りは、やり直さず知らせる）
+        if (!alive(p) || e.kind !== 'net' || tries >= 2) throw e;
+        perfCount.retry++;
+        p.percent = 0;
+        return new Promise(function (r) { setTimeout(r, 800 + Math.random() * 400); }).then(once);
+      });
+    }
+    return once().then(function (first) {
+      if (!alive(p)) return null;
+      p.chunks = first.chunks;
+      p.total = first.chunks.reduce(function (a, c) { return a + c[2]; }, 0);
+      addSubtitles(first.vtt);
+      var bytes = decode(first.data);
+      if (bytes.length !== p.chunks[0][2]) throw new ApiError('読み込んだ中身の大きさが合いません。', 'net');
+      if (MS && MS.isTypeSupported(first.mime)) return startStream(p, first, bytes);
+      if (MS) stopSourceOnly(p);
+      return startWhole(p, bytes);
+    });
+  }
+  function stopSourceOnly(p) {
+    if (p.url) { try { URL.revokeObjectURL(p.url); } catch (e) { /* 止まっていればよい */ } }
+    p.url = ''; p.ms = null;
+    video.removeAttribute('src'); video.load();
+  }
+  function startStream(p, first, bytes) {
+    return whenOpen(p).then(function () {
+      if (!alive(p)) return null;
+      p.sb = p.ms.addSourceBuffer(first.mime);
+      return appendBytes(p, bytes);
+    }).then(function () {
+      if (!alive(p)) return null;
+      p.got[0] = true;
+      p.appendedAt[0] = Date.now();
+      p.ready = true;
+      setFill(p);
+      try { if (!p.sb.updating && p.ms.readyState === 'open') p.ms.duration = first.duration; } catch (e) { /* 長さは後で分かる */ }
+      if (p.at > 0) { try { video.currentTime = p.at; } catch (e) { /* 頭から再生する */ } }
+      if (video.paused) { var pr = video.play(); if (pr && pr.catch) pr.catch(function () { /* canplay で知らせる */ }); }
+      pump(p);
+      return null;
+    });
+  }
+  // 古い iPhone（iOS 17.0 まで）: つなぎながらの再生ができないので、全部受け取ってから再生する（3本ずつ並べて）
+  function startWhole(p, bytes) {
+    var t0 = performance.now(), count = p.chunks.length, parts = p.parts = new Array(count), next = 1;
+    parts[0] = bytes; p.got[0] = true; setFill(p);
+    setCover('読み込んでいます。終わると再生します', true);
+    function showPct() { setWait(p, '読み込み中… ' + els.fill.value + '%'); }
+    showPct();
+    function worker() {
+      if (!alive(p) || p.failed || next >= count) return Promise.resolve();
+      var i = next++;
+      return getChunk(p, i).then(function (b) {
+        if (!alive(p) || p.failed) return undefined;
+        parts[i] = b; p.got[i] = true; p.waitT0 = performance.now(); p.slow = false; setFill(p); showPct();
+        return worker();
+      });
+    }
+    var jobs = [];
+    for (var w = 0; w < WHOLE_PARALLEL; w++) jobs.push(worker());
+    return Promise.all(jobs).then(function () {
+      if (!alive(p) || p.failed) return;
+      perfNote('whole', t0);
+      p.url = URL.createObjectURL(new Blob(parts, { type: 'video/mp4' }));
+      p.parts = null;
+      p.waitT0 = performance.now();
+      video.src = p.url;
+      if (p.at > 0) video.addEventListener('loadedmetadata', function () { if (alive(p)) { try { video.currentTime = p.at; } catch (e) { /* 頭から */ } } }, { once: true });
+      var pr = video.play();
+      if (pr && pr.catch) pr.catch(function () {
+        // 押した直後でないので、端末が止めることがある: 待たせず、押してもらう
+        if (alive(p) && !p.failed && !p.started) { p.started = true; showPlayer(p); setStatus(p, '動画の ▶ を押すと始まります。', 'hint'); }
+      });
+    });
+  }
+  function decode(b64) {
+    if (typeof Uint8Array.fromBase64 === 'function') return Uint8Array.fromBase64(b64);
+    var s = atob(b64), n = s.length, a = new Uint8Array(n);
+    for (var i = 0; i < n; i++) a[i] = s.charCodeAt(i);
+    return a;
+  }
+  function appendBytes(p, bytes) {
+    return new Promise(function (resolve, reject) {
+      var sb = p.sb;
+      if (!sb) { reject(new ApiError('止めました。', 'abort')); return; }
+      var done = function () { off(); resolve(); };
+      var bad = function () { off(); reject(new ApiError('動画をつなげませんでした。', 'media')); };
+      function off() { sb.removeEventListener('updateend', done); sb.removeEventListener('error', bad); }
+      sb.addEventListener('updateend', done); sb.addEventListener('error', bad);
+      try { sb.appendBuffer(bytes); } catch (e) {
+        off();
+        if (e && e.name === 'QuotaExceededError') {
+          // 入れ物がいっぱい: いま見ている所の1分より前を捨てて、もう一度（端末の小さいスマホで起きる）
+          var until = Math.max(0, video.currentTime - 60);
+          if (until < 1 || ++p.quota > 3) { reject(new ApiError('この端末では動画を読み込みきれません。', 'media')); return; }
+          var again = function () { sb.removeEventListener('updateend', again); appendBytes(p, bytes).then(resolve, reject); };
+          sb.addEventListener('updateend', again);
+          try { sb.remove(0, until); } catch (e2) { sb.removeEventListener('updateend', again); reject(new ApiError('動画をつなげませんでした。', 'media')); }
+        } else { reject(new ApiError('動画をつなげませんでした。', 'media')); }
+      }
+    });
+  }
+  function covered(p, i) {
+    var c = p.chunks[i], pad = Math.min(1.5, c[1] / 4), from = c[0] + pad, to = c[0] + c[1] - pad, b;   // 端の少しの差は見ない（映像と音声の端はそろわない）
+    try { b = p.sb.buffered; } catch (e) { return false; }
+    for (var r = 0; r < b.length; r++) if (b.start(r) <= from && b.end(r) >= to) return true;
+    return false;
+  }
+  function chunkAt(p, time) {
+    var i = 0;
+    while (i + 1 < p.chunks.length && p.chunks[i + 1][0] <= time) i++;
+    return i;
+  }
+  /** 次に要る小分け: いま見ている所から約2分先までで、まだ入れ物に無い物 */
+  function nextNeeded(p) {
+    var now = video.currentTime || 0, from = chunkAt(p, now);
+    for (var i = from; i < p.chunks.length; i++) {
+      if (i > from && p.chunks[i][0] + p.chunks[i][1] > now + AHEAD_SECONDS) return -1;   // いま見ている小分けは必ず受け取る
+      // 入れて間もないのに無いと見えるときは、取り直さない（空回りしない）。しばらく前に入れた物が無いなら、端末が捨てたので取り直す
+      if (!covered(p, i) && !(p.appendedAt[i] && Date.now() - p.appendedAt[i] < RECHECK_MS)) return i;
+    }
+    return -1;
+  }
+  function pump(p) {
+    if (p.pumping || !alive(p) || !p.sb || !p.ready || p.failed) return;
+    var i = nextNeeded(p);
+    if (i < 0) { maybeEnd(p); return; }
+    p.pumping = true;
+    getChunk(p, i).then(function (bytes) {
+      if (!alive(p) || p.failed) return null;
+      return appendBytes(p, bytes).then(function () {
+        if (!alive(p)) return;
+        p.got[i] = true;
+        p.appendedAt[i] = Date.now();
+        setFill(p);
+      });
+    }).then(function () {
+      p.pumping = false;
+      if (alive(p)) pump(p);
+    }, function (e) {
+      p.pumping = false;
+      failed(p, e);
+    });
+  }
+  function maybeEnd(p) {
+    if (!p.ms || !p.sb || p.sb.updating || p.ms.readyState !== 'open') return;
+    // 最後の小分けが入っていれば、終わりを伝える（途中を飛ばして見た人も、最後で止まらずに終わる）。あとで途中を足すときは自動で開き直る
+    if (p.got[p.chunks.length - 1]) { try { p.ms.endOfStream(); } catch (e) { /* 次に足すときにまた見る */ } }
+  }
+  /** 小分けを1つ受け取る。通信の失敗と時間切れは、間をあけて2回まで自動でやり直す。やり直しても変わらない断りは、やり直さない */
+  function getChunk(p, i) {
+    var attempt = 0;
+    function once() {
+      attempt++;
+      return api('videoChunk', { video: p.key, n: i }, { signal: p.ac.signal }).then(function (res) {
+        if (res.n !== i) throw new ApiError('読み込んだ中身の順番が合いません。', 'net');
+        var bytes = decode(res.data);
+        if (bytes.length !== p.chunks[i][2]) throw new ApiError('読み込んだ中身の大きさが合いません。', 'net');
+        return bytes;
+      }).catch(function (e) {
+        if (!alive(p) || e.kind === 'auth' || e.kind === 'refused' || e.kind === 'abort' || attempt >= 3) throw e;
+        perfCount.retry++;
+        return new Promise(function (r) { setTimeout(r, 800 * attempt + Math.random() * 400); }).then(once);   // 一斉に重ならないよう少しずらす
+      });
+    }
+    return once();
+  }
+  function failed(p, e) {
+    if (!alive(p) || p.failed || (e && e.kind === 'abort')) return;
+    p.failed = true;
+    clearInterval(p.watch);
+    try { p.ac.abort(); } catch (e2) { /* 止まっていればよい */ }   // 残りの受け取りが、知らせを上書きしないように
+    var at = video.currentTime || p.at || 0;
+    if (!p.started) blankVideo();
+    if (e && e.kind === 'auth') {
+      // 見られる所までは止めない。何が起きるかを言う
+      setStatus(p, e.message + (p.started ? ' ここまで読み込んだ所は、このまま見られます。' : ''), 'err', { label: 'ログイン', onclick: function () { login({ v: p.key, at: at }); } });
+      return;
+    }
+    var again = { label: 'やり直す', onclick: function () { retry(p, at); } };
+    if (e && e.kind === 'refused') { setStatus(p, e.message, 'err', again); return; }
+    setStatus(p, (e && e.message ? e.message : '動画を読み込めませんでした。') + ' もう一度お試しください。', 'err', again);
+  }
+  function retry(p, at) { var key = p.key; stopCurrent(); press(key, at); }
+  /** 再生が始まる前に止まったとき: 回る印を消す。動画の面を隠して、白い枠に今の状態を出す */
+  function blankVideo() {
+    video.pause(); video.removeAttribute('src'); video.load();
+    video.hidden = true;
+    setCover('読み込めませんでした。「やり直す」を押してください。', false);
+  }
+
+  // ── 待ちの見せ方
+  function waiting(p) { return alive(p) && !p.failed && (!p.started || p.stallT0 > 0); }
+  function showWaitText(p) {
+    var pct = p.started ? '' : ' ' + (p.parts ? els.fill.value : p.percent) + '%';
+    setWait(p, (p.slow ? SLOW_TEXT : '読み込み中…') + pct);
+    if (!p.started && p.slow) setCover(SLOW_TEXT, true);
+  }
+  function watchWait(p) {
+    if (!waiting(p)) return;
+    var t = performance.now() - (p.started ? p.stallT0 : p.waitT0);
+    if (t > STOP_MS) {
+      var at = video.currentTime || p.at || 0;
+      p.failed = true;
+      clearInterval(p.watch);
+      try { p.ac.abort(); } catch (e) { /* 止まっていればよい */ }
+      if (!p.started) blankVideo();
+      setStatus(p, '30秒待っても読み込めませんでした。電波や Wi-Fi を確かめて、「やり直す」を押してください。', 'err', { label: 'やり直す', onclick: function () { retry(p, at); } });
+    } else if (t > SLOW_MS && !p.slow) {
+      p.slow = true;
+      showWaitText(p);
+    }
+  }
+  video.addEventListener('waiting', function () {
+    var p = current;
+    if (!p || !p.started || p.failed) return;
+    if (!p.stallT0) { p.stallT0 = performance.now(); perfCount.stall++; p.slow = false; showWaitText(p); }
+    pump(p);
+  });
+  video.addEventListener('playing', function () {
+    var p = current;
+    if (!p) return;
+    if (!p.started) { p.started = true; perfNote(p.nth > 1 ? 'open:2' : 'open', p.t0); }
+    if (p.stallT0) { perfNote('stall', p.stallT0); p.stallT0 = 0; }
+    p.slow = false;
+    showPlayer(p);
+    if (!p.failed) clearStatus(p.key);
+  });
+  video.addEventListener('canplay', function () {
+    var p = current;
+    if (!p || p.failed) return;
+    if (p.stallT0) { perfNote('stall', p.stallT0); p.stallT0 = 0; p.slow = false; clearWait(p.key); }
+    if (!p.started && video.paused) {
+      // 端末が自動で始めさせてくれないとき: 待たせず、押してもらう
+      p.started = true;
+      showPlayer(p);
+      setStatus(p, '動画の ▶ を押すと始まります。', 'hint');
+    }
+  });
+  video.addEventListener('timeupdate', function () { if (current && current.sb) pump(current); });
+  video.addEventListener('seeking', function () { if (current && current.sb) pump(current); });
+  video.addEventListener('error', function () {
+    var p = current;
+    if (!p || !video.getAttribute('src')) return;
+    failed(p, new ApiError('動画を再生できませんでした。', 'media'));
+  });
+
+  // ── 字幕
+  function clearCues() {
+    if (!subTrack) return;
+    var cues = subTrack.cues;
+    if (cues) { for (var i = cues.length - 1; i >= 0; i--) subTrack.removeCue(cues[i]); }
+    subTrack.mode = 'hidden';
+  }
+  function vttSeconds(s) {
+    var v = 0;
+    s.split(':').map(Number).forEach(function (x) { v = v * 60 + x; });
+    return v;
+  }
+  function addSubtitles(vtt) {
+    if (!vtt || typeof VTTCue === 'undefined') { els.subs.hidden = true; return; }
+    if (!subTrack) subTrack = video.addTextTrack('subtitles', '日本語', 'ja');
+    subTrack.mode = 'hidden';
+    clearCues();
+    vtt.replace(/\r/g, '').split(/\n\n+/).forEach(function (block) {
+      var lines = block.split('\n'), at = -1;
+      lines.forEach(function (l, i) { if (at < 0 && l.indexOf('-->') >= 0) at = i; });
+      if (at < 0) return;
+      var m = /^\s*([\d:.]+)\s*-->\s*([\d:.]+)/.exec(lines[at]);
+      if (!m) return;
+      var text = lines.slice(at + 1).join('\n').replace(/<[^>]*>/g, '').trim();
+      if (text) { try { subTrack.addCue(new VTTCue(vttSeconds(m[1]), vttSeconds(m[2]), text)); } catch (e) { /* 読めない行は飛ばす */ } }
+    });
+    subTrack.mode = subsOn ? 'showing' : 'hidden';
+    els.subs.hidden = false;
+    els.subs.textContent = subsOn ? '字幕を消す' : '字幕を出す';
+  }
+  els.subs.addEventListener('click', function () {
+    subsOn = !subsOn;
+    if (subTrack) subTrack.mode = subsOn ? 'showing' : 'hidden';
+    els.subs.textContent = subsOn ? '字幕を消す' : '字幕を出す';
+  });
+
+  // ── 押す所
+  document.querySelectorAll('[data-video]').forEach(function (b) {
+    b.addEventListener('click', function () { press(b.dataset.video); });
+  });
+  els.close.addEventListener('click', closePlayer);
+  els.logout.addEventListener('click', function () {
+    closePlayer();
+    store.del(TOKEN_KEY); store.del(STATE_KEY);
+    els.account.textContent = '';
+    showGate('ログアウトしました。');
+  });
+
+  // ── 始まり
+  els.ver.textContent = '版 ' + WEB_BUILD.replace('video-web-', '');
+  els.perfBuilds.textContent = '画面 ' + WEB_BUILD;
+  var ua = navigator.userAgent || '';
+  if (/\bLine\/|FBAN|FBAV|Instagram|; wv\)/i.test(ua)) {   // 案内の出し分けにだけ使う（認証の判断には使わない）
+    els.inapp.hidden = false;
+    els.inapp.textContent = 'このアプリの中の画面では、Google のログインができないことがあります。Safari か Chrome で次のアドレスを開いてください: ' + location.origin + location.pathname;
+  }
+  if (!cfg.apiUrl || !cfg.clientId || !cfg.redirectUri) {
+    showGate('いま準備中です。', true);
+    els.login.hidden = true;
+    return;
+  }
+  var back = consumeRedirect();
+  if (back && back.error) { showGate(back.error, true); return; }
+  if (token()) afterLogin(back);
+  else { store.del(TOKEN_KEY); showGate(''); }   // 案内は上の1行にある（同じ文を2つ出さない）
+})();
+</script>
+</body>
+</html>
