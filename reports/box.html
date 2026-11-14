@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; connect-src 'none'; worker-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>分析レポートの箱</title>
+<style>html,body{margin:0;height:100%;background:#fff;font-family:system-ui,sans-serif}</style>
+</head>
+<body>
+<script>
+// 分析レポートを描く「箱」（画面「分析レポート」が、砂箱の iframe〈allow-same-origin なし〉に入れて使う）。
+// 信頼境界:
+//   - この箱は、会社の画面と同じアドレスにあっても、砂箱の中では「どこでもない場所（null）」として動く。
+//     辞書のログインの札（同じアドレスの端末の覚え）には届かない。外への通信（connect-src）も無い
+//   - 砂箱の外（ふつうのページとして開く・砂箱なしで埋め込む）では、何もしない（よその画面がこの箱を使って、
+//     同じアドレスで台本を動かせないように）
+//   - 受け取るのは、親の画面からの「この箱の合言葉つき」の知らせだけ。中身はレポートの HTML（窓口がログインを確かめてから返した物）。
+//     レポートは自分の台本で動く（目次・たたみ）ので、HTML として開く。それを安全にするのが、この砂箱
+// レポートは、受け取った HTML の <head> の直後に、小さな見張りの台本を1つ足して開く（レポートの中身・表は変えない）:
+//   別のファイルへのリンク（レポート同士のつながり）を押したら、親へ知らせる（箱の中で開かない）／描けたら親へ知らせる
+(function () {
+  'use strict';
+  var n = location.hash.slice(1);
+  var sandboxed = false;
+  try { sandboxed = self.origin === 'null'; } catch (e) { sandboxed = false; }
+  if (window.parent === window || !sandboxed || !/^[0-9a-f]{32}$/.test(n)) {
+    document.body.textContent = 'この画面は、分析レポートの画面の中でだけ使います。';
+    return;
+  }
+  var HASH_RE = /^[A-Za-z0-9_\-:.%]{1,200}$/;
+  var S = '<' + 'script>', E = '<' + '/script>';
+  // レポートの中で動く見張り（合言葉は 16 進の文字だけ＝そのまま書いてよい）
+  var watcher = S + '(function(){var n="' + n + '",up=window.parent,H=' + HASH_RE.toString() + ';' +
+    'function say(t,x){try{var m={t:t,n:n};if(x)for(var k in x)m[k]=x[k];up.postMessage(m,"*");}catch(e){}}' +
+    'document.addEventListener("click",function(e){var a=e.target&&e.target.closest?e.target.closest("a[href]"):null;if(!a)return;' +
+    'var h=a.getAttribute("href")||"";if(h.charAt(0)==="#")return;e.preventDefault();say("link",{href:h.slice(0,500)});},true);' +
+    // 親から「その所へ」: 砂箱の中の blob のページでは location.hash を書き換えても黙って何も起きない（11/11 に試験で見つけた）。
+    // アドレスの # は replaceState で書き、移るのはレポート自身の部品（_openHash）に任せる。無いレポートは、知らせの合図と、その見出しへの移動で代える
+    'window.addEventListener("message",function(e){if(e.source!==up)return;var d=e.data;if(!d||d.n!==n||d.t!=="goto"||typeof d.h!=="string"||!H.test(d.h))return;' +
+    'try{history.replaceState(history.state,"","#"+d.h);}catch(x){}' +
+    'if(typeof window._openHash==="function"){window._openHash();return;}' +
+    'try{window.dispatchEvent(new HashChangeEvent("hashchange"));}catch(x){}' +
+    'var id=d.h;try{id=decodeURIComponent(d.h);}catch(x){}var el=document.getElementById(id);if(el&&el.scrollIntoView)el.scrollIntoView();});' +
+    'document.addEventListener("DOMContentLoaded",function(){say("dcl");});window.addEventListener("load",function(){say("load");});' +
+    '})();' + E;
+
+  /** はじめの 4096 バイトの中の <head>（大文字も）の直後の位置。無ければ -1 */
+  function afterHead(u8) {
+    var lim = Math.min(u8.length - 6, 4096);
+    for (var i = 0; i <= lim; i++) {
+      if (u8[i] !== 60 || u8[i + 5] !== 62) continue;
+      var w = String.fromCharCode(u8[i + 1], u8[i + 2], u8[i + 3], u8[i + 4]).toLowerCase();
+      if (w === 'head') return i + 6;
+    }
+    return -1;
+  }
+  function join(parts) {
+    var len = 0, k = 0;
+    parts.forEach(function (p) { len += p.length; });
+    var out = new Uint8Array(len);
+    parts.forEach(function (p) { out.set(p, k); k += p.length; });
+    return out;
+  }
+  var nested = null;
+  /** 予備: 箱が自分でレポートへ移れない端末では、箱の中にもう1つ砂箱を作って描き、知らせを親へ取り次ぐ */
+  function nestedShow(parts, hash) {
+    if (nested) return;
+    var html = new TextDecoder().decode(join(parts));
+    nested = document.createElement('iframe');
+    nested.setAttribute('sandbox', 'allow-scripts allow-modals allow-downloads');
+    nested.setAttribute('allow', 'clipboard-write *');
+    nested.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;border:0';
+    var pendingHash = hash;
+    window.addEventListener('message', function (ev) {
+      var d = ev.data;
+      if (!d || d.n !== n) return;
+      if (ev.source === nested.contentWindow) {
+        window.parent.postMessage(d, '*');
+        if (d.t === 'dcl' && pendingHash) { nested.contentWindow.postMessage({ t: 'goto', n: n, h: pendingHash }, '*'); pendingHash = ''; }
+      } else if (ev.source === window.parent && d.t === 'goto') nested.contentWindow.postMessage(d, '*');
+    });
+    nested.srcdoc = html;
+    document.body.appendChild(nested);
+  }
+  function show(u8, hash) {
+    var at = afterHead(u8);
+    var inj = new TextEncoder().encode(watcher);
+    var parts = at >= 0 ? [u8.subarray(0, at), inj, u8.subarray(at)] : [u8];
+    var url = URL.createObjectURL(new Blob(parts, { type: 'text/html;charset=utf-8' }));
+    // ふつうは、この箱がレポートの画面に置き換わる（履歴を増やさない）。移れなかったら予備へ
+    var later = setTimeout(function () { nestedShow(parts, hash); }, 2500);
+    try { location.replace(url + (hash ? '#' + hash : '')); } catch (e) { clearTimeout(later); nestedShow(parts, hash); }
+  }
+  var shown = false;
+  window.addEventListener('message', function (ev) {
+    if (shown || ev.source !== window.parent) return;
+    var d = ev.data;
+    if (!d || d.t !== 'show' || d.n !== n || !(d.bytes instanceof ArrayBuffer)) return;
+    shown = true;
+    show(new Uint8Array(d.bytes), typeof d.hash === 'string' && HASH_RE.test(d.hash) ? d.hash : '');
+  });
+  window.parent.postMessage({ t: 'ready', n: n }, '*');
+})();
+</script>
+</body>
+</html>

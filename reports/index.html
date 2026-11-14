@@ -1,0 +1,809 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-ZLNdaCs7Vyi5pvMAfA7XYWfb7+3gINzvaElHCf+RNFI=' 'sha256-JNTerc/2DKEvMNZddzzKv0xUTA53JJ8eKPzFvzGEEpk=' 'sha256-nfZ1cOZwwLa5t2WBlOYB8wnLDeR3y7SOVhxUI2yXWKQ='; style-src 'sha256-8oXxVot/eeCXCGa7uitoyBEcwpgfS6uC45V5+/ZvL/I='; img-src data:; connect-src https://script.google.com https://script.googleusercontent.com; frame-src 'self' blob:; base-uri 'none'; object-src 'none'; form-action 'none'">
+<title>分析レポート</title>
+<script>// Google から戻ったアドレスの # 以降（ログインの札）を、ほかの台本より先に取り出してアドレスから消す。
+// 消さないと、履歴・画面のアドレス欄に札が残る。取り出した値は app.js が合言葉（state）と照らしてから使う
+(function () {
+  try {
+    var h = location.hash || '';
+    if (/(^#|&)(access_token|error)=/.test(h)) {
+      window.__oauthHash = h;
+      history.replaceState(null, '', location.pathname + location.search);
+    }
+  } catch (e) { /* 取り出せなくてもログイン画面から入り直せる */ }
+})();
+</script>
+<style>/* 画面「分析レポート」: 辞書と同じ色・文字。上の帯は小さく1行（名前は1か所・ボタンは文字の幅）。レポートは帯の下いっぱいに開く */
+:root{--bg:#f5f6f2;--panel:#fff;--ink:#1f2a24;--sub:#5b6a61;--line:#dfe5dd;--soft:#eef2ec;--accent:#00873c;--accent-soft:#e3f2e9;--ng:#b42318;--ng-soft:#fdeceb;--bar:56px}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"BIZ UDPGothic","Yu Gothic UI","Meiryo","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;font-size:16px;line-height:1.75}
+button{font:inherit;color:inherit}
+
+/* 上の帯: 戻るは左（ブラウザと同じ）・名前・右に版やアカウント */
+.bar{position:sticky;top:0;z-index:20;height:var(--bar);display:flex;align-items:center;gap:10px;padding:0 16px;background:var(--panel);border-bottom:1px solid var(--line)}
+.back{display:inline-flex;align-items:center;min-height:40px;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);text-decoration:none;white-space:nowrap;font-size:15px;cursor:pointer}
+.back:hover{background:var(--soft)}
+.back:focus-visible,.open:focus-visible,.ghost:focus-visible,.primary:focus-visible,.ver:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.bar h1{flex:0 1 auto;min-width:0;margin:0;font-size:18px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rlabel{flex:0 0 auto;font-size:14px;color:var(--sub);white-space:nowrap}
+.who{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--sub);white-space:nowrap;min-width:0}
+.who span{overflow:hidden;text-overflow:ellipsis}
+.ghost{display:inline-flex;align-items:center;min-height:36px;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);cursor:pointer;font-size:14px;white-space:nowrap}
+.ghost:hover{background:var(--soft)}
+.primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 22px;border:0;border-radius:12px;background:var(--accent);color:#fff;font-weight:700;font-size:16px;cursor:pointer}
+.primary:hover{filter:brightness(1.08)}
+.primary:disabled{opacity:.6;cursor:wait}
+
+.page{max-width:860px;margin:0 auto;padding:20px 16px 24px}
+/* ログインの入口 */
+.gate{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px;text-align:center}
+.gate-lead{margin:0 0 10px;color:var(--sub);font-size:15px}
+.gate-msg{margin:0 0 14px;font-size:16px;white-space:pre-line}
+.gate-msg.err{color:var(--ng);font-weight:700}
+.gate-note{margin:14px 0 0;font-size:13px;color:var(--sub)}
+
+/* 一覧: 行ぜんたいが押す所。待ちの知らせは押した行の中（すぐ下） */
+.lead{margin:0 0 12px;font-size:15px;color:var(--sub)}
+.rows{display:grid;gap:12px}
+.row{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.row.sk{height:76px;background:linear-gradient(90deg,#fff 0%,#eef2ec 50%,#fff 100%);background-size:200% 100%;animation:sk 1.4s linear infinite}
+@keyframes sk{to{background-position:-200% 0}}
+.open{display:flex;align-items:center;gap:12px;width:100%;min-height:72px;padding:12px 16px;border:0;background:none;text-align:left;cursor:pointer}
+.open:hover{background:var(--soft)}
+.open:disabled{cursor:default;background:none}
+.open .tt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.open b{font-size:17px;line-height:1.5}
+.open small{font-size:14px;color:var(--sub)}
+.open .go{flex:0 0 auto;color:var(--accent);font-weight:700;white-space:nowrap}
+.row[aria-busy="true"] .open{cursor:progress}
+.row.cur{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.st{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:0 16px 14px;font-size:14px}
+.st progress{flex:1 1 100%;width:100%;height:10px;accent-color:var(--accent)}
+.st.err{color:var(--ng);font-weight:700}
+.st .primary{min-height:40px;font-size:15px;padding:0 16px}
+.note{margin:14px 0 0;font-size:13px;color:var(--sub)}
+
+/* 動いている印（待ちが 0.3 秒を超える所） */
+.spin{display:inline-block;width:16px;height:16px;margin-right:8px;vertical-align:-3px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--accent);animation:spin .9s linear infinite}
+.spin.big{width:28px;height:28px;border-width:3px;margin:0 0 10px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){.spin{animation-duration:3s}.row.sk{animation:none}}
+
+/* レポートを開く所: 帯の下いっぱい */
+body.viewing{overflow:hidden}
+body.viewing .page,body.viewing .foot{display:none}
+.viewer{position:fixed;left:0;right:0;bottom:0;top:var(--bar);background:#fff}
+.viewer iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block;background:#fff}
+.viewer iframe.off{visibility:hidden;pointer-events:none}   /* 見ていないレポートは隠すだけ（描き直さない・前の位置のまま） */
+.viewer.away{visibility:hidden;pointer-events:none}        /* 一覧を見ている間も、箱の大きさは保つ（display:none にするとレポートの位置が先頭に戻る） */
+.cover{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(255,255,255,.94);font-size:16px}
+.viewer-msg{position:absolute;left:50%;top:12px;z-index:3;transform:translateX(-50%);max-width:calc(100% - 32px);margin:0;padding:8px 14px;border-radius:10px;background:#1f2a24;color:#fff;font-size:14px}
+
+.foot{max-width:860px;margin:0 auto;padding:0 16px 24px;font-size:12px;color:var(--sub)}
+.ver{cursor:default;user-select:none}
+
+/* 待ち時間の記録（調べるときだけ開く）。表は枠の中で縦横に送っても、見出しの行と左の列が残る */
+.perf{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.45)}
+.perf-card{width:min(980px,100%);max-height:100%;display:flex;flex-direction:column;background:var(--panel);border-radius:14px;padding:16px}
+.perf-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.perf-head h2{margin:0;font-size:18px}
+.perf-note{margin:6px 0;font-size:13px;color:var(--sub)}
+.perf-wrap{flex:1 1 auto;min-height:0;max-height:52vh;overflow:auto;border:1px solid var(--line);border-radius:8px}
+.perf-wrap table{border-collapse:separate;border-spacing:0;font-size:13px;white-space:nowrap}
+.perf-wrap th,.perf-wrap td{padding:4px 10px;border-bottom:1px solid var(--line);text-align:right;background:var(--panel)}
+.perf-wrap thead th{position:sticky;top:0;z-index:2;background:var(--soft);text-align:center}
+.perf-wrap th:first-child,.perf-wrap td:first-child{position:sticky;left:0;z-index:1;text-align:left;border-right:1px solid var(--line)}
+.perf-wrap thead th:first-child{z-index:3}
+.perf-wrap th:first-child,.perf-wrap td:first-child{white-space:normal;min-width:7em;max-width:min(16em,42vw)}   /* 左の列が枠より広いと、横に送ったとき左の列が流れる（幅 375 で 14px）→ 長い名前は折り返す */
+.perf-actions{margin-top:8px}
+
+@media (max-width:640px){
+  :root{--bar:52px}
+  .bar{padding:0 10px;gap:8px}
+  .bar h1{font-size:16px}
+  .back{padding:0 10px;font-size:14px}
+  .who{gap:6px}
+  .who span{display:none}
+  .page{padding:14px 12px 20px}
+  .open{min-height:64px;padding:10px 12px}
+  .open b{font-size:16px}
+  .rlabel{font-size:12px}
+}
+@media print{.bar,.foot,.perf{display:none!important}}
+</style>
+<script>window.REPORT_CONFIG={"clientId":"1072945615483-74jadmaet56chvhkfh2cpt4ae9dvh140.apps.googleusercontent.com","apiUrl":"https://script.google.com/macros/s/AKfycbxrVeOFC-rlPXQUWiB8rllZ4KIkrUPcaNp87hvlCnY0jCOwKTdf-VWsAB_Wb_dOAZk/exec","redirectUri":"https://acoop-ai.github.io/tenpo-release/"};</script>
+</head>
+<body>
+<header class="bar" id="bar">
+  <a id="toDict" class="back" href="../">← 辞書へ</a>
+  <button id="toList" class="back" type="button" hidden>← 一覧へ</button>
+  <h1 id="title">分析レポート</h1>
+  <span id="rlabel" class="rlabel" hidden></span>
+  <div class="who" id="who" hidden>
+    <span id="account"></span>
+    <button id="logout" class="ghost" type="button">ログアウト</button>
+  </div>
+</header>
+
+<main class="page" id="page">
+  <section id="gate" class="gate" aria-labelledby="gate-lead">
+    <p id="gate-lead" class="gate-lead">会社の Google アカウントでログインすると、分析レポートを見られます。</p>
+    <p id="gate-msg" class="gate-msg" role="status" aria-live="polite"><span class="spin" aria-hidden="true"></span>確かめています…</p>
+    <button id="login" class="primary" type="button" hidden>Google でログイン</button>
+    <p id="gate-note" class="gate-note">個人の Gmail では見られません。パスワードは Google の画面（accounts.google.com）にだけ入れてください。</p>
+  </section>
+
+  <section id="list" class="list" hidden aria-labelledby="list-lead">
+    <p id="list-lead" class="lead">見たいレポートを押してください。社内の数字が入っています。見るだけで、ここから変えることはできません。</p>
+    <div id="rows" class="rows" aria-live="polite"></div>
+    <p class="note">大きなレポートは、はじめの1回だけ読み込みに時間がかかります。この画面を開いている間は覚えているので、2回目からはすぐ開きます。</p>
+  </section>
+</main>
+
+<div id="viewer" class="viewer" hidden>
+  <div id="cover" class="cover" hidden><span class="spin big" aria-hidden="true"></span><span id="cover-text">表示しています…</span></div>
+  <p id="viewer-msg" class="viewer-msg" role="status" aria-live="polite" hidden></p>
+</div>
+
+<footer class="foot" id="foot">
+  <span id="ver" class="ver" tabindex="0" role="button" title="長押し（または5回続けて押す）で、待ち時間の記録"></span>
+</footer>
+
+<div id="perf" class="perf" hidden role="dialog" aria-modal="true" aria-labelledby="perf-title">
+  <div class="perf-card">
+    <div class="perf-head"><h2 id="perf-title">待ち時間の記録</h2><button id="perf-close" class="ghost" type="button" aria-label="閉じる">×</button></div>
+    <p class="perf-note">調べるときの画面です。数字の意味は分からなくて大丈夫です。この画面を開いてからの操作ごとの時間で（新しい 200 件）、この端末のメモリだけにあり、閉じると消えます（中身やメールは持っていません）。</p>
+    <p id="perf-builds" class="perf-note"></p>
+    <div class="perf-wrap" id="perf-wrap"><table id="perf-table"></table></div>
+    <p id="perf-counts" class="perf-note"></p>
+    <div class="perf-actions"><button id="perf-copy" class="ghost" type="button">コピーする</button></div>
+    <p id="perf-out" class="perf-note" role="status"></p>
+  </div>
+</div>
+<script>// 画面「分析レポート」: 店舗運営/MDの辞書の窓口（Report.gs）が返すレポートを、砂箱の iframe の「箱」で開く。
+// 信頼境界:
+//   - この画面（GitHub Pages・公開）にレポートの中身・題・ドライブの番号・会社のドメイン・鍵を置かない。題も版も窓口から受け取る
+//   - だれが見られるかは窓口が毎回決める（辞書の範囲の中）。画面の判断では開けない
+//   - ログインは辞書と同じ札（端末の覚え storeops_token_v1・1時間）。戻りのアドレスの # 以降は、この端末で出した合言葉と一致したときだけ使う
+//   - レポート（自分の台本で動く HTML）は、砂箱の iframe（allow-same-origin なし）の箱（box.html）の中で開く。
+//     レポートの台本から、この画面と辞書の札には届かない。箱からの知らせは、その箱の合言葉つきのものだけ受け取る
+//   - 受け取った中身は組み直して戻したあと、指紋（SHA-256）を一覧の札と照らす。合わなければ開かない
+//   - 中身はこの画面を開いている間だけメモリに覚える（端末には残さない）
+// ログインは辞書と同じ「同じタブで Google へ移って戻る」方式。戻り先は辞書のアドレスで、辞書の boot.js が
+//   合言葉の頭（report-）を見て、札に触らずこの画面へ渡す（戻り先の登録を増やさないため）。
+(function () {
+  'use strict';
+  var WEB_BUILD = 'report-web-2026-11-11b';
+  var cfg = window.REPORT_CONFIG || {};
+  var TOKEN_KEY = 'storeops_token_v1';            // { t: 札, exp: 期限 }（辞書と同じ札）
+  var STATE_KEY = 'storeops_report_state_v1';     // [{ s: 合言葉, t: 出した時刻, h: ログイン前に見ていた所 }]
+  var STATE_MAX_AGE = 10 * 60 * 1000;             // 合言葉は10分・1回限り
+  var PARALLEL = 5;                               // 小分けを同時に頼む本数（窓口の同時の数を食いすぎない）
+  var TRIES = 3;                                  // 一時的な失敗のとき、1本の小分けを頼む回数（はじめの1回を含む）
+  var PART_TIMEOUT = 120000;                      // 1本を待つ上限
+  var LIST_TIMEOUT = 30000;
+  var SLOW_MS = 8000;                             // ここを超えたら「時間がかかっています」
+  var STALL_MS = 30000;                           // 受け取りがこの間まったく進まなければ止めて、やり直しのボタン
+  var ROUTE_RE = /^#\/([A-Z]{2,12})(?:\/([A-Za-z0-9_\-:.%]{1,200}))?$/;
+  var FRAG_RE = /^[A-Za-z0-9_\-:.%]{1,200}$/;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var els = {
+    bar: $('bar'), toDict: $('toDict'), toList: $('toList'), title: $('title'), rlabel: $('rlabel'), who: $('who'), account: $('account'), logout: $('logout'),
+    gate: $('gate'), gateMsg: $('gate-msg'), gateNote: $('gate-note'), login: $('login'), list: $('list'), rows: $('rows'),
+    viewer: $('viewer'), cover: $('cover'), coverText: $('cover-text'), viewerMsg: $('viewer-msg'), ver: $('ver'),
+    perf: $('perf'), perfBuilds: $('perf-builds'), perfTable: $('perf-table'), perfCounts: $('perf-counts'), perfOut: $('perf-out')
+  };
+
+  // ── 端末の覚え（辞書と同じ localStorage）。使えない端末では、この画面の間だけメモリに
+  var memo = {};
+  var store = {
+    get: function (k) { try { var v = localStorage.getItem(k); return v === null ? (memo[k] || null) : JSON.parse(v); } catch (e) { return memo[k] || null; } },
+    set: function (k, v) { memo[k] = v; try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* 覚えられなくても今は使える */ } },
+    del: function (k) { delete memo[k]; try { localStorage.removeItem(k); } catch (e) { /* 同上 */ } }
+  };
+  function token() {
+    var tok = store.get(TOKEN_KEY);
+    return tok && typeof tok.t === 'string' && tok.exp > Date.now() ? tok.t : '';
+  }
+  var mb = function (bytes) { return (bytes / 1e6).toFixed(1); };
+
+  // ほかの画面の中に埋め込まれたら、何もしない（押し間違いを誘う重ね置きを避ける）
+  if (window.top !== window.self) {
+    els.gateMsg.textContent = 'この画面は、ほかの画面の中では開けません。';
+    return;
+  }
+
+  // ── 速さの記録（画面の中の時間）。中身・メールは持たない。操作の名前とミリ秒・サーバーの ms・返事の大きさだけ
+  var perfLog = [];
+  var perfCount = { network: 0, retry: 0, stall: 0 };
+  var apiBuild = '';
+  var SERVER_PARTS = [['auth', 'ログインの確かめ'], ['list', '置き場を見る'], ['find', 'ファイルを探す'], ['read', 'ドライブを読む'], ['log', '記録を書く']];
+  var PERF_LABELS = { login: 'ログイン（押してから一覧まで・人の操作を含む）', list: '一覧が出るまで', open: '押してから見えるまで（はじめて）', reopen: '2回目に開く（覚えているとき）', fetch: 'うち 受け取り', unzip: 'うち 戻す・指紋を確かめる', render: 'うち 描く（箱に渡してから見えるまで）', 'api:reportList': '通信: 一覧', 'api:reportPart': '通信: 小分け' };
+  var PERF_ORDER = ['login', 'list', 'open', 'reopen', 'fetch', 'unzip', 'render', 'api:reportList', 'api:reportPart'];
+  function perfNote(what, t0, note, extra) {
+    var row = { what: what, ms: Math.round(performance.now() - t0), note: note || '' };
+    if (extra && extra.server && typeof extra.server === 'object') {
+      row.server = Number(extra.server.t) || 0; row.parts = {};
+      SERVER_PARTS.forEach(function (p) { var v = extra.server[p[0]]; if (typeof v === 'number' && isFinite(v)) row.parts[p[0]] = v; });
+    }
+    if (extra && isFinite(extra.kb)) row.kb = extra.kb;
+    if (extra && extra.key) row.key = extra.key;
+    perfLog.push(row); if (perfLog.length > 200) perfLog.shift();
+  }
+  function median(list) { var a = list.slice().sort(function (x, y) { return x - y; }); var n = a.length; return n ? (n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2) : 0; }
+  function perfSummary() {
+    var groups = {};
+    perfLog.forEach(function (r) { var k = r.what + (r.key ? '|' + r.key : ''); (groups[k] = groups[k] || []).push(r); });
+    return Object.keys(groups).sort(function (a, b) {
+      var ia = PERF_ORDER.indexOf(a.split('|')[0]), ib = PERF_ORDER.indexOf(b.split('|')[0]);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || (a < b ? -1 : 1);
+    }).map(function (k) {
+      var rows = groups[k], ms = rows.map(function (r) { return r.ms; }), last = rows[rows.length - 1], what = k.split('|')[0], key = k.split('|')[1] || '';
+      var srv = rows.filter(function (r) { return typeof r.server === 'number'; }), parts = {};
+      SERVER_PARTS.forEach(function (p) { var v = srv.map(function (r) { return r.parts && r.parts[p[0]]; }).filter(function (x) { return typeof x === 'number'; }); parts[p[0]] = v.length ? median(v) : null; });
+      return { what: what, key: key, label: (PERF_LABELS[what] || what) + (key ? '（' + key + '）' : ''), n: rows.length, last: last.ms, median: median(ms), max: Math.max.apply(null, ms),
+        server: srv.length ? median(srv.map(function (r) { return r.server; })) : null, parts: parts, kb: isFinite(last.kb) ? last.kb : null, errors: rows.filter(function (r) { return r.note; }).length };
+    });
+  }
+  function secText(ms) { return ms == null ? '—' : (ms / 1000).toFixed(ms < 10000 ? 2 : 1); }
+  var PERF_HEAD = ['操作', '回数', '最後（秒）', '中央値（秒）', 'いちばん遅い（秒）', 'サーバーの中・全体（秒）'].concat(SERVER_PARTS.map(function (p) { return 'うち ' + p[1] + '（秒）'; }), ['返事（KB）']);
+  function perfCells(x) { return [x.label + (x.errors ? '（断り・失敗 ' + x.errors + '）' : ''), String(x.n), secText(x.last), secText(x.median), secText(x.max), secText(x.server)].concat(SERVER_PARTS.map(function (p) { return secText(x.parts[p[0]]); }), [x.kb == null ? '—' : String(x.kb)]); }
+  function perfCountsText() { return '通信の失敗 ' + perfCount.network + ' 回・頼み直し ' + perfCount.retry + ' 回・止まって中断 ' + perfCount.stall + ' 回'; }
+  function buildsText() { return '画面 ' + WEB_BUILD + ' ／ 窓口 ' + (apiBuild || '（まだ聞いていません）'); }
+  function perfText() {
+    return ['分析レポート 待ち時間の記録（' + buildsText() + '・' + new Date().toLocaleString('ja-JP') + '）', PERF_HEAD.join('\t')]
+      .concat(perfSummary().map(function (x) { return perfCells(x).join('\t'); }), [perfCountsText()]).join('\n');
+  }
+  window.__reportPerfTable = function () { return perfSummary(); };   // 試験と、公開のあとの計測で読む（中身は操作の名前とミリ秒だけ）
+  window.__reportPerfText = function () { return perfText(); };
+  function showPerf() {
+    els.perf.hidden = false;
+    els.perfBuilds.textContent = buildsText();
+    var table = els.perfTable;
+    table.textContent = '';
+    var thead = document.createElement('thead'), tr = document.createElement('tr');
+    PERF_HEAD.forEach(function (t) { var th = document.createElement('th'); th.textContent = t; th.scope = 'col'; tr.appendChild(th); });
+    thead.appendChild(tr); table.appendChild(thead);
+    var tbody = document.createElement('tbody'), rows = perfSummary();
+    if (!rows.length) { var e = document.createElement('tr'), d = document.createElement('td'); d.colSpan = PERF_HEAD.length; d.textContent = 'まだ記録がありません。'; e.appendChild(d); tbody.appendChild(e); }
+    rows.forEach(function (r) {
+      var line = document.createElement('tr');
+      perfCells(r).forEach(function (t, i) { var c = document.createElement(i ? 'td' : 'th'); if (!i) c.scope = 'row'; c.textContent = t; line.appendChild(c); });
+      tbody.appendChild(line);
+    });
+    table.appendChild(tbody);
+    els.perfCounts.textContent = perfCountsText();
+  }
+  (function () {
+    var node = els.ver, timer = 0, clicks = 0, clickTimer = 0;
+    function stop() { clearTimeout(timer); timer = 0; }
+    node.addEventListener('pointerdown', function () { stop(); timer = setTimeout(function () { timer = 0; showPerf(); }, 700); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (ev) { node.addEventListener(ev, stop); });
+    node.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    node.addEventListener('click', function () { clicks++; clearTimeout(clickTimer); clickTimer = setTimeout(function () { clicks = 0; }, 1500); if (clicks >= 5) { clicks = 0; showPerf(); } });
+    node.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showPerf(); } });
+    $('perf-close').addEventListener('click', function () { els.perf.hidden = true; });
+    els.perf.addEventListener('click', function (e) { if (e.target === els.perf) els.perf.hidden = true; });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !els.perf.hidden) els.perf.hidden = true; });
+    $('perf-copy').addEventListener('click', function () {
+      try { navigator.clipboard.writeText(perfText()).then(function () { els.perfOut.textContent = '写しました。貼り付けて送れます。'; }, function () { els.perfOut.textContent = '写せませんでした。'; }); } catch (e) { els.perfOut.textContent = '写せませんでした。'; }
+    });
+  })();
+
+  // ── 窓口を呼ぶ
+  function ApiError(message, kind) { this.message = message; this.kind = kind; }
+  function readBody(res, onBytes) {
+    if (!onBytes || !res.body || !res.body.getReader) return res.text();
+    var reader = res.body.getReader(), decoder = new TextDecoder(), parts = [], got = 0;
+    return (function next() {
+      return reader.read().then(function (r) {
+        if (r.done) { parts.push(decoder.decode()); return parts.join(''); }
+        got += r.value.length; parts.push(decoder.decode(r.value, { stream: true })); onBytes(got);
+        return next();
+      });
+    })();
+  }
+  function api(action, extra, o) {
+    o = o || {};
+    var t0 = performance.now(), ctl = new AbortController(), timedOut = false;
+    var timer = setTimeout(function () { timedOut = true; ctl.abort(); }, o.timeout || LIST_TIMEOUT);
+    var onOuter = function () { ctl.abort(); };
+    if (o.signal) { if (o.signal.aborted) ctl.abort(); else o.signal.addEventListener('abort', onOuter); }
+    var body = Object.assign({ action: action, accessToken: token() }, extra || {});
+    return fetch(cfg.apiUrl, {
+      method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },   // 事前確認（preflight）の要らない送り方
+      body: JSON.stringify(body), cache: 'no-store', credentials: 'omit', redirect: 'follow', signal: ctl.signal
+    }).then(function (res) {
+      if (!res.ok) throw new ApiError('接続できませんでした。', 'net');
+      return readBody(res, o.onBytes);
+    }).then(function (text) {
+      var data;
+      try { data = JSON.parse(text); } catch (e) { throw new ApiError('接続できませんでした。', 'net'); }
+      perfNote('api:' + action, t0, data && data.ok ? '' : '断り', { server: data && data.ms, kb: Math.round(text.length / 1024) });
+      if (!data || !data.ok) {
+        if (data && data.auth) { store.del(TOKEN_KEY); throw new ApiError(data.error || 'ログインの期限が切れました。もう一度ログインしてください。', 'auth'); }
+        if (data && data.changed) throw new ApiError(data.error || 'レポートが新しい版に入れ替わりました。', 'changed');
+        // retry の印＝窓口の一時的な失敗（やり直せば通る）。無いのは、やり直しても変わらない断り
+        throw new ApiError((data && data.error) || '処理できませんでした。', data && data.retry ? 'net' : 'refused');
+      }
+      return data;
+    }).catch(function (e) {
+      if (e instanceof ApiError) throw e;
+      if (ctl.signal.aborted && !timedOut) throw new ApiError('止めました。', 'abort');
+      perfNote('api:' + action, t0, '失敗');
+      perfCount.network++;
+      if (timedOut) throw new ApiError('時間がかかりすぎたので止めました。', 'net');
+      throw new ApiError('接続できませんでした。通信の状態を確かめてください。', 'net');
+    }).finally(function () {
+      clearTimeout(timer);
+      if (o.signal) o.signal.removeEventListener('abort', onOuter);
+    });
+  }
+
+  // ── ログイン（辞書と同じ札。戻り先は辞書のアドレス＝辞書の boot.js が、合言葉の頭 report- を見て、この画面へ渡す）
+  function randomHex() {
+    var a = new Uint8Array(16);
+    crypto.getRandomValues(a);
+    return Array.from(a, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+  }
+  function login() {
+    var now = Date.now(), s = 'report-' + randomHex();
+    var pending = (store.get(STATE_KEY) || []).filter(function (x) { return x && now - x.t < STATE_MAX_AGE; }).slice(-3);
+    pending.push({ s: s, t: now, h: ROUTE_RE.test(location.hash) ? location.hash : '' });
+    store.set(STATE_KEY, pending);
+    els.login.disabled = true;
+    els.gateMsg.classList.remove('err');
+    els.gateMsg.textContent = 'Google のログイン画面へ移ります…';
+    var q = new URLSearchParams({
+      client_id: cfg.clientId, redirect_uri: cfg.redirectUri, response_type: 'token', scope: 'openid email',
+      prompt: 'select_account',   // 会社以外のアカウントが自動で選ばれ続けないよう、毎回アカウントを選ばせる
+      state: s
+    });
+    location.assign('https://accounts.google.com/o/oauth2/v2/auth?' + q.toString());
+  }
+  function consumeRedirect() {
+    var h = window.__oauthHash;
+    window.__oauthHash = null;
+    if (!h) return null;
+    var p = new URLSearchParams(h.replace(/^#/, '')), now = Date.now(), pending = store.get(STATE_KEY) || [];
+    var hit = pending.filter(function (x) { return x && x.s === p.get('state') && now - x.t < STATE_MAX_AGE; })[0];
+    var rest = pending.filter(function (x) { return x && x !== hit && now - x.t < STATE_MAX_AGE; });
+    if (rest.length) store.set(STATE_KEY, rest); else store.del(STATE_KEY);
+    if (!hit) return { error: 'ログインを確かめられませんでした（時間がたちすぎたか、別の画面から始めたログインです）。もう一度ログインしてください。' };
+    var back = typeof hit.h === 'string' && ROUTE_RE.test(hit.h) ? hit.h : '';
+    if (p.get('error')) return { error: p.get('error') === 'access_denied' ? 'ログインが取り消されました。' : 'ログインに失敗しました。もう一度お試しください。', back: back };
+    var t = p.get('access_token');
+    if (!t) return { error: 'ログインに失敗しました。もう一度お試しください。', back: back };
+    var sec = Math.max(60, Number(p.get('expires_in')) || 3600);
+    store.set(TOKEN_KEY, { t: t, exp: now + (sec - 60) * 1000 });
+    return { ok: true, back: back, pressedAt: hit.t };
+  }
+
+  // ── 画面の切り替え
+  function setBar(mode, item) {
+    var viewing = mode === 'viewer';
+    document.body.classList.toggle('viewing', viewing);
+    els.toDict.hidden = viewing; els.toList.hidden = !viewing;
+    els.title.textContent = viewing && item ? item.title : '分析レポート';
+    els.rlabel.hidden = !(viewing && item);
+    els.rlabel.textContent = viewing && item ? item.label + '・' + item.date : '';
+    els.who.hidden = mode !== 'list';
+    document.title = viewing && item ? item.title + '｜分析レポート' : '分析レポート';
+  }
+  function showGate(text, isError, button) {
+    setBar('gate');
+    hideViewer(false); els.list.hidden = true; els.gate.hidden = false;
+    els.gateMsg.textContent = text;
+    els.gateMsg.classList.toggle('err', !!isError);
+    els.gateNote.hidden = !!isError;
+    els.login.hidden = false; els.login.disabled = false;
+    els.login.textContent = button ? button.label : 'Google でログイン';
+    els.login.onclick = button ? button.onclick : login;
+  }
+  function showSkeleton() {
+    setBar('gate');
+    els.gate.hidden = true; hideViewer(false); els.list.hidden = false;
+    els.rows.textContent = '';
+    for (var i = 0; i < 2; i++) { var d = document.createElement('div'); d.className = 'row sk'; d.setAttribute('aria-hidden', 'true'); els.rows.appendChild(d); }
+    var st = document.createElement('p'); st.className = 'gate-msg'; st.setAttribute('role', 'status');
+    var s = document.createElement('span'); s.className = 'spin'; s.setAttribute('aria-hidden', 'true');
+    st.appendChild(s); st.appendChild(document.createTextNode('一覧を読み込んでいます…'));
+    els.rows.appendChild(st);
+  }
+
+  // ── 一覧
+  var reports = null, byKey = {};
+  var bytesOf = {};    // key → { sha, u8 }（この画面の間だけ）
+  var loading = {};    // key → 受け取りの仕事
+  var frames = {};     // key → { iframe, nonce, sha, sent, done, frag, t0, firstOpen }
+  var wanted = null;   // { key, frag, t0, from } いま開きたいもの（最後に押したもの）
+  var current = '';    // いま見せているレポート
+
+  function loadList(back) {
+    var t0 = performance.now();
+    showSkeleton();
+    var slow = setTimeout(function () { var st = els.rows.querySelector('.gate-msg'); if (st) st.lastChild.textContent = '時間がかかっています（通信を確かめています）…'; }, SLOW_MS);
+    return api('reportList', {}, { timeout: LIST_TIMEOUT }).then(function (res) {
+      clearTimeout(slow);
+      if (!Array.isArray(res.reports)) throw new ApiError('一覧の形が違います。', 'refused');
+      reports = res.reports.filter(function (r) { return r && typeof r.key === 'string' && /^[A-Z]{2,12}$/.test(r.key) && typeof r.title === 'string'; });
+      byKey = {};
+      reports.forEach(function (r) { byKey[r.key] = r; });
+      // 入れ替わった版の中身・箱は捨てる（古い版を見せない）
+      Object.keys(bytesOf).forEach(function (k) { if (!byKey[k] || byKey[k].sha256 !== bytesOf[k].sha) delete bytesOf[k]; });
+      Object.keys(frames).forEach(function (k) { if (!byKey[k] || byKey[k].sha256 !== frames[k].sha) dropFrame(k); });
+      apiBuild = String(res.build || '');
+      els.account.textContent = String(res.email || '') + ' でログイン中';
+      els.ver.textContent = buildsText();
+      perfNote('list', t0);
+      if (back && back.pressedAt) perfLog.push({ what: 'login', ms: Date.now() - back.pressedAt, note: '' });
+      renderRows();
+      render();
+    }).catch(function (e) {
+      clearTimeout(slow);
+      if (e.kind === 'auth') { showGate(e.message, true); return; }
+      showGate(e.message + ' もう一度お試しください。', true, { label: 'もう一度読み込む', onclick: function () { if (token()) loadList(); else login(); } });
+    });
+  }
+
+  function rowOf(key) { return els.rows.querySelector('.row[data-key="' + key + '"]'); }
+  function rowNote(r) { return r.label + '・' + r.date + '・' + mb(r.size) + ' MB' + (bytesOf[r.key] ? '・読み込み済み（すぐ開きます）' : ''); }
+  function renderRows() {
+    els.rows.textContent = '';
+    reports.forEach(function (r) {
+      var row = document.createElement('div'); row.className = 'row'; row.dataset.key = r.key;
+      var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'open';
+      var tt = document.createElement('span'); tt.className = 'tt';
+      var b = document.createElement('b'); b.textContent = r.title;
+      var sm = document.createElement('small');
+      var go = document.createElement('span'); go.className = 'go';
+      var ready = !r.missing && !r.broken && typeof r.sha256 === 'string';
+      if (ready) {
+        sm.textContent = rowNote(r);
+        go.textContent = '開く ›';
+        btn.addEventListener('click', function () { want(r.key, '', 'list'); });
+      } else {
+        sm.textContent = 'いま準備中です';
+        btn.disabled = true;
+      }
+      tt.appendChild(b); tt.appendChild(sm); btn.appendChild(tt); btn.appendChild(go);
+      var st = document.createElement('div'); st.className = 'st'; st.setAttribute('role', 'status'); st.setAttribute('aria-live', 'polite'); st.hidden = true;
+      row.appendChild(btn); row.appendChild(st);
+      els.rows.appendChild(row);
+      if (loading[r.key] && !loading[r.key].failed) paintProgress(loading[r.key]);
+    });
+  }
+
+  // ── 開く
+  function parseRoute() {
+    var m = ROUTE_RE.exec(location.hash || '');
+    return m ? { key: m[1], frag: m[2] || '' } : { key: '', frag: '' };
+  }
+  function render() {
+    if (!reports) return;
+    var r = parseRoute();
+    if (r.key && byKey[r.key] && !byKey[r.key].missing && !byKey[r.key].broken) {
+      if (bytesOf[r.key]) { showViewer(r.key, r.frag); return; }
+      // まだ受け取っていない（アドレスから直接・ログインから戻った）: 一覧の行で受け取りを見せ、届いたら開く
+      if (!current) showListView();
+      want(r.key, r.frag, current ? 'link' : 'route');
+      return;
+    }
+    if (r.key) history.replaceState(null, '', location.pathname + location.search);   // 決めていない名前・準備中のレポート
+    showListView();
+  }
+  /** 箱の置き場を隠す。keep＝描いた箱の大きさを保ったまま見えなくする（display:none にすると、箱の中のレポートの位置が先頭に戻る＝11/11 に試験で見つけた） */
+  function hideViewer(keep) {
+    var has = keep && Object.keys(frames).length > 0;
+    els.viewer.classList.toggle('away', has);
+    els.viewer.hidden = !has;
+  }
+  function showListView() {
+    setBar('list');
+    current = '';
+    hideCover();
+    els.gate.hidden = true; hideViewer(true); els.list.hidden = false;
+    Object.keys(frames).forEach(function (k) { frames[k].iframe.classList.add('off'); });
+    els.rows.querySelectorAll('.row').forEach(function (row) { row.classList.toggle('cur', !!(wanted && row.dataset.key === wanted.key && loading[wanted.key])); });
+  }
+  function routeOf(key, frag) { return '#/' + key + (frag ? '/' + frag : ''); }
+  /** 開きたい（押した・アドレス・レポートの中のリンク）。受け取り済みならすぐ、まだなら受け取ってから開く。二度押しても受け取りは1回 */
+  function want(key, frag, from) {
+    var item = byKey[key];
+    if (!item || item.missing || item.broken) return;
+    if (!(wanted && wanted.key === key && loading[key])) wanted = { key: key, frag: frag || '', t0: performance.now(), from: from };
+    else wanted.frag = frag || wanted.frag;
+    var row = rowOf(key);
+    els.rows.querySelectorAll('.row').forEach(function (x) { x.classList.toggle('cur', x === row); });
+    if (bytesOf[key] && bytesOf[key].sha === item.sha256) { go(key, frag); return; }
+    if (from === 'link' && current) coverText('「' + item.title + '」を読み込んでいます…');
+    load(item).then(function () {
+      if (wanted && wanted.key === key) go(key, wanted.frag);
+    }, function (e) {
+      if (e.kind === 'abort') return;
+      if (e.kind === 'auth') { showGate(e.message, true); return; }
+      if (e.kind === 'changed') { loadList(); return; }   // 新しい版の一覧を受け取り直す（押し直してもらう）
+      if (from === 'link' && current) { hideCover(); toast('「' + item.title + '」を読み込めませんでした。' + (e.message || '') + ' 一覧から開き直してください。'); }
+    });
+  }
+  function go(key, frag) {
+    var target = routeOf(key, frag);
+    if (location.hash !== target) { location.hash = target; return; }   // 履歴に1つ足す（ブラウザの戻るで一覧・前のレポートへ戻れる）→ hashchange で開く
+    showViewer(key, frag);
+  }
+
+  // ── 受け取り: 小分けを並べて頼み、届いた順に戻し、全部そろったら縮めたものを戻して指紋を確かめる
+  function load(item) {
+    var key = item.key;
+    var job = loading[key];
+    if (job && job.sha === item.sha256 && !job.failed) return job.promise;
+    var keep = job && job.sha === item.sha256 ? job.parts : null;   // 前に止まった分は、届いた小分けを使う（続きから）
+    // 空きは null で埋める（空の配列の every は「全部ある」と答えてしまう）
+    job = loading[key] = { key: key, sha: item.sha256, item: item, parts: keep || new Array(item.parts).fill(null), sizes: new Array(item.parts).fill(0), inflight: {}, failed: false, ac: new AbortController(), t0: performance.now(), lastAt: Date.now(), slow: false };
+    for (var i = 0; i < item.parts; i++) job.sizes[i] = job.parts[i] ? item.send / item.parts : 0;
+    paintProgress(job);
+    job.promise = new Promise(function (resolve, reject) {
+      var next = 0, active = 0, finished = false;
+      var watch = setInterval(function () {
+        if (finished) return;
+        if (!job.slow && performance.now() - job.t0 > SLOW_MS) { job.slow = true; paintProgress(job); }
+        if (active && Date.now() - job.lastAt > STALL_MS) { perfCount.stall++; fail(new ApiError('通信が止まりました。', 'net')); }
+      }, 1000);
+      function fail(e) {
+        if (finished) return;
+        finished = true; clearInterval(watch);
+        job.failed = true;
+        try { job.ac.abort(); } catch (x) { /* 止まっていればよい */ }
+        if (e.kind !== 'changed' && e.kind !== 'abort' && e.kind !== 'auth') paintError(job, e);
+        else clearRow(key);
+        reject(e);
+      }
+      function pump() {
+        if (finished) return;
+        if (job.parts.every(Boolean)) {
+          finished = true; clearInterval(watch);
+          assemble(job).then(resolve, function (e) { job.failed = true; job.parts = new Array(item.parts).fill(null); paintError(job, e); reject(e); });
+          return;
+        }
+        while (active < PARALLEL && next < item.parts) {
+          var n = next++;
+          if (job.parts[n]) continue;
+          active++;
+          part(job, n, 1).then(function (got) { active--; job.parts[got.n] = got.u8; pump(); }, function (e) { active--; fail(e); });
+        }
+      }
+      pump();
+    });
+    return job.promise;
+  }
+  function part(job, n, attempt) {
+    var item = job.item;
+    return api('reportPart', { key: item.key, n: n, want: item.sha256 }, {
+      timeout: PART_TIMEOUT, signal: job.ac.signal,
+      onBytes: function (got) { job.inflight[n] = got; job.lastAt = Date.now(); paintProgress(job); }
+    }).then(function (res) {
+      delete job.inflight[n];
+      if (res.key !== item.key || res.n !== n || res.sha256 !== item.sha256 || res.parts !== item.parts || typeof res.data !== 'string' || !/^[A-Za-z0-9+/]*={0,2}$/.test(res.data) || res.data.length % 4) {
+        throw new ApiError('受け取った中身の形が違います。', 'net');
+      }
+      var bin = atob(res.data), u8 = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      job.sizes[n] = res.data.length; job.lastAt = Date.now();
+      paintProgress(job);
+      return { n: n, u8: u8 };
+    }).catch(function (e) {
+      delete job.inflight[n];
+      if (e.kind === 'net' && attempt < TRIES && !job.failed) {
+        perfCount.retry++;
+        return new Promise(function (r) { setTimeout(r, 600 * attempt); }).then(function () { return part(job, n, attempt + 1); });
+      }
+      throw e;
+    });
+  }
+  function hex(buf) { return Array.from(new Uint8Array(buf), function (b) { return ('0' + b.toString(16)).slice(-2); }).join(''); }
+  function assemble(job) {
+    var item = job.item, tFetch = performance.now();
+    perfNote('fetch', job.t0, '', { key: item.key });
+    paintProgress(job, '受け取りました。戻しています…');
+    if (typeof DecompressionStream !== 'function' || !(window.crypto && crypto.subtle)) {
+      return Promise.reject(new ApiError('この端末のブラウザでは開けません。新しい版のブラウザ（Chrome・Edge・Safari）で開いてください。', 'refused'));
+    }
+    var total = 0;
+    job.parts.forEach(function (p) { total += p.length; });
+    if (4 * Math.ceil(total / 3) !== item.send) return Promise.reject(new ApiError('受け取った中身の大きさが違います。', 'net'));
+    var stream = new Blob(job.parts).stream().pipeThrough(new DecompressionStream('gzip'));
+    return new Response(stream).arrayBuffer().then(function (ab) {
+      if (ab.byteLength !== item.size) throw new ApiError('戻した中身の大きさが違います。', 'net');
+      return crypto.subtle.digest('SHA-256', ab).then(function (d) {
+        if (hex(d) !== item.sha256) throw new ApiError('受け取った中身が元のファイルと違います。', 'net');
+        bytesOf[item.key] = { sha: item.sha256, u8: new Uint8Array(ab) };
+        job.parts = null;
+        delete loading[item.key];
+        perfNote('unzip', tFetch, '', { key: item.key });
+        clearRow(item.key);
+        var row = rowOf(item.key);
+        if (row) row.querySelector('small').textContent = rowNote(item);
+        return bytesOf[item.key];
+      });
+    }, function (e) { if (e instanceof ApiError) throw e; throw new ApiError('中身を戻せませんでした。', 'net'); });
+  }
+
+  // ── 待ちの知らせ: 押した行の中（すぐ下）。リンクで移るときは、いま見ているレポートの上にも
+  function paintProgress(job, label) {
+    var item = job.item, got = 0;
+    if (job.parts) for (var i = 0; i < item.parts; i++) got += job.parts[i] ? (job.sizes[i] || item.send / item.parts) : (job.inflight[i] || 0);
+    got = Math.min(got, item.send);
+    var pct = Math.min(100, Math.round(got / item.send * 100));
+    var text = label || ('読み込み中… ' + mb(got) + ' / ' + mb(item.send) + ' MB（' + pct + '%）' + (job.slow ? '　大きなレポートです。もう少しお待ちください…' : ''));
+    var row = rowOf(item.key);
+    if (row) {
+      row.setAttribute('aria-busy', 'true');
+      var st = row.querySelector('.st');
+      st.hidden = false;
+      if (st.className !== 'st') st.className = 'st';
+      var p = st.querySelector('progress'), t = st.querySelector('.st-text');
+      if (!p || !t) {
+        st.textContent = '';
+        var s = document.createElement('span'); s.className = 'spin'; s.setAttribute('aria-hidden', 'true');
+        t = document.createElement('span'); t.className = 'st-text';
+        p = document.createElement('progress'); p.max = 100;
+        st.appendChild(s); st.appendChild(t); st.appendChild(p);
+      }
+      if (t.textContent !== text) t.textContent = text;
+      p.value = label ? 100 : pct;
+    }
+    if (wanted && wanted.key === item.key && wanted.from === 'link' && current) coverText('「' + item.title + '」を' + text);
+  }
+  function paintError(job, e) {
+    var item = job.item, row = rowOf(item.key);
+    if (wanted && wanted.key === item.key && wanted.from === 'link' && current) hideCover();
+    if (!row) return;
+    row.removeAttribute('aria-busy');
+    var st = row.querySelector('.st');
+    st.hidden = false; st.className = 'st err'; st.textContent = '';
+    var t = document.createElement('span'); t.textContent = '読み込めませんでした。' + (e && e.message ? e.message : '');
+    st.appendChild(t);
+    if (e && e.kind !== 'refused') {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'primary'; b.textContent = 'やり直す（続きから）';
+      b.addEventListener('click', function () { if (!token()) { showGate('ログインの期限が切れました。もう一度ログインしてください。', true); return; } want(item.key, wanted && wanted.key === item.key ? wanted.frag : '', 'list'); });
+      st.appendChild(b);
+    }
+  }
+  function clearRow(key) {
+    var row = rowOf(key);
+    if (!row) return;
+    row.removeAttribute('aria-busy');
+    var st = row.querySelector('.st'); st.hidden = true; st.textContent = ''; st.className = 'st';
+  }
+  function coverText(text) { els.cover.hidden = false; els.coverText.textContent = text; }
+  function hideCover() { els.cover.hidden = true; }
+  var toastTimer = 0;
+  function toast(text) {
+    els.viewerMsg.hidden = false; els.viewerMsg.textContent = text;
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { els.viewerMsg.hidden = true; }, 5000);
+  }
+
+  // ── 見せる: 砂箱の箱（box.html）へ中身を渡して描く。一度描いた箱は、一覧へ戻っても残す（次はすぐ・前の位置のまま）
+  function dropFrame(key) {
+    var f = frames[key];
+    if (!f) return;
+    delete frames[key];
+    if (f.iframe.parentNode) f.iframe.parentNode.removeChild(f.iframe);
+  }
+  function showViewer(key, frag) {
+    var item = byKey[key], data = bytesOf[key];
+    if (!item || !data) { showListView(); return; }
+    setBar('viewer', item);
+    current = key;
+    els.gate.hidden = true; els.list.hidden = true; els.viewer.classList.remove('away'); els.viewer.hidden = false;
+    els.viewerMsg.hidden = true;
+    var t0 = wanted && wanted.key === key ? wanted.t0 : performance.now();
+    var firstOpen = !!(wanted && wanted.key === key && wanted.from !== 'shown');
+    if (wanted && wanted.key === key) wanted.from = 'shown';
+    Object.keys(frames).forEach(function (k) { frames[k].iframe.classList.toggle('off', k !== key); });
+    var f = frames[key];
+    if (f && f.sha === data.sha) {
+      if (f.done) {
+        hideCover();
+        if (frag && FRAG_RE.test(frag)) f.iframe.contentWindow.postMessage({ t: 'goto', n: f.nonce, h: frag }, '*');
+        perfNote('reopen', t0, '', { key: key });
+        try { f.iframe.focus(); } catch (e) { /* 見えていればよい */ }
+      } else coverText('表示しています…');
+      return;
+    }
+    dropFrame(key);
+    var nonce = randomHex();
+    var iframe = document.createElement('iframe');
+    // 砂箱: 台本だけ動かせる（同じアドレスとしては扱わない＝辞書の札に届かない）。印刷・保存・コピーは、レポートの機能として許す
+    iframe.setAttribute('sandbox', 'allow-scripts allow-modals allow-downloads');
+    iframe.setAttribute('allow', 'clipboard-write *');
+    iframe.setAttribute('referrerpolicy', 'no-referrer');
+    iframe.title = item.title;
+    frames[key] = { iframe: iframe, nonce: nonce, sha: data.sha, sent: false, done: false, frag: frag, t0: t0, firstOpen: firstOpen };
+    coverText('表示しています…');
+    iframe.src = 'box.html#' + nonce;
+    els.viewer.appendChild(iframe);
+  }
+  window.addEventListener('message', function (ev) {
+    var key = null;
+    Object.keys(frames).forEach(function (k) { if (frames[k].iframe.contentWindow === ev.source) key = k; });
+    if (!key) return;
+    var f = frames[key], d = ev.data;
+    if (!d || typeof d !== 'object' || d.n !== f.nonce) return;
+    if (d.t === 'ready' && !f.sent) {
+      var data = bytesOf[key];
+      if (!data || data.sha !== f.sha) return;
+      f.sent = true; f.tSend = performance.now();
+      var copy = data.u8.slice().buffer;   // 渡すと手元から消えるので、写しを渡す（手元は2回目のために残す）
+      f.iframe.contentWindow.postMessage({ t: 'show', n: f.nonce, bytes: copy, hash: f.frag && FRAG_RE.test(f.frag) ? f.frag : '' }, '*', [copy]);
+    } else if (d.t === 'dcl' && f.sent && !f.done) {
+      f.done = true;
+      perfNote('render', f.tSend, '', { key: key });
+      perfNote(f.firstOpen ? 'open' : 'reopen', f.t0, '', { key: key });
+      if (current === key) { hideCover(); try { f.iframe.focus(); } catch (e) { /* 見えていればよい */ } }
+    } else if (d.t === 'link' && typeof d.href === 'string' && current === key) {
+      openLink(d.href);
+    }
+  });
+  /** レポートの中の「別のファイル」へのリンク: 決めた2本のどれかなら、この画面で開く（その所へ飛ぶ）。ほかは開かない */
+  function openLink(href) {
+    var raw = String(href).slice(0, 500), cut = raw.indexOf('#');
+    var path = (cut >= 0 ? raw.slice(0, cut) : raw).split('?')[0], frag = cut >= 0 ? raw.slice(cut + 1) : '';
+    var name = path.split('/').pop();
+    try { name = decodeURIComponent(name); } catch (e) { /* そのまま */ }
+    var hit = (reports || []).filter(function (r) { return typeof r.match === 'string' && r.match && name.indexOf(r.match) === 0 && /\.html$/i.test(name); })[0];
+    if (!hit || hit.missing || hit.broken) { toast('このリンクは、ここでは開けません。'); return; }
+    want(hit.key, FRAG_RE.test(frag) ? frag : '', 'link');
+  }
+
+  // ── 上の帯
+  els.toList.addEventListener('click', function () { location.hash = '#/'; });
+  // 辞書へ: 辞書から来たときは、辞書の前の画面へ戻す（ブラウザの「戻る」と同じ・辞書の開いていた所のまま）。分からなければ辞書のはじめを開く
+  //   辞書の画面は referrer を送らない設定（no-referrer）なので、履歴の一覧では辞書の行のアドレスが null で見える（11/11 に試験で見つけた）。
+  //   この画面の行のすぐ前の null の行は、同じ場所（acoop-ai.github.io）の、アドレスを伏せた画面＝ここへのリンクを持つ辞書、として戻る
+  els.toDict.addEventListener('click', function (e) {
+    var nav = window.navigation;
+    if (!nav || typeof nav.entries !== 'function' || !nav.currentEntry) return;
+    try {
+      var list = nav.entries(), dict = [new URL('../', location.href).pathname, new URL('../index.html', location.href).pathname];
+      for (var i = nav.currentEntry.index - 1; i >= 0; i--) {
+        if (list[i].url === null) { e.preventDefault(); nav.traverseTo(list[i].key); return; }
+        var u = new URL(list[i].url);
+        if (u.origin !== location.origin) return;
+        if (u.pathname === location.pathname) continue;   // この画面の中の行き来は飛ばす
+        if (dict.indexOf(u.pathname) >= 0) { e.preventDefault(); nav.traverseTo(list[i].key); }
+        return;
+      }
+    } catch (x) { /* ふつうに辞書を開く */ }
+  });
+  els.logout.addEventListener('click', function () {
+    store.del(TOKEN_KEY);
+    bytesOf = {}; loading = {}; wanted = null;
+    Object.keys(frames).forEach(dropFrame);
+    reports = null; byKey = {};
+    history.replaceState(null, '', location.pathname + location.search);
+    showGate('ログアウトしました（辞書のログインも終わりました）。');
+  });
+  window.addEventListener('hashchange', render);
+
+  // ── はじめ
+  els.ver.textContent = buildsText();
+  if (!cfg.apiUrl || !cfg.clientId || !cfg.redirectUri) { showGate('いま準備中です。', true); els.login.hidden = true; return; }
+  var back = consumeRedirect();
+  if (back && back.back) history.replaceState(null, '', location.pathname + location.search + back.back);   // ログイン前に見ていた所へ
+  if (back && back.error) { showGate(back.error, true); return; }
+  if (token()) loadList(back);
+  else { store.del(TOKEN_KEY); showGate('会社の Google アカウントでログインしてください。'); }
+})();
+</script>
+</body>
+</html>

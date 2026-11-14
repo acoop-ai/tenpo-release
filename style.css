@@ -196,3 +196,12 @@ body.locked #bar,body.locked #notice,body.locked #view,body.locked #tip{display:
   details.more>summary{padding:4px 0}
   .box,.card5,.body,a.row{break-inside:avoid}
 }
+
+/* 分析レポートの入口（上の帯の右・探す欄の右に、目立たない1行。見たい人だけが押す・2026-11-11）。元は _src/web/menu.html。
+   build.py が Web 版の style.css の終わりに足す（1枚版には入れない）。題の行（戻る・題・教える）に置くとスマホで題が読めなくなるので、探す欄の行に置く */
+#reportsLink{flex:0 0 auto;display:inline-flex;align-items:center;min-height:44px;padding:0 4px;font-size:14px;color:var(--sub);white-space:nowrap;text-decoration:underline;text-decoration-color:#b7c2ba;text-underline-offset:4px}
+#reportsLink:hover{color:var(--ink);text-decoration-color:currentColor}
+#reportsLink:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:6px}
+#bar .row2 #q{min-width:0}
+@media (max-width:640px){#reportsLink{font-size:13px;padding:0 2px}}
+@media print{#reportsLink{display:none}}
