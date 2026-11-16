@@ -68,7 +68,7 @@
       return r;
     });
   }
-  function logout() { mem = null; store.del(SESSION_KEY); store.del(OLD_TOKEN_KEY); location.replace(location.pathname); }   // この端末の札を捨てるだけ（Google の札も捨てる＝残すと次に開いたとき黙って入り直してしまう。Google の許可は取り消さない＝ほかのアプリ・端末を落とさない）
+  function logout() { mem = null; store.del(SESSION_KEY); store.del(OLD_TOKEN_KEY); store.del('storeops_role_v1'); location.replace(location.pathname); }   // この端末の札を捨てるだけ（Google の札も捨てる＝残すと次に開いたとき黙って入り直してしまう。Google の許可は取り消さない＝ほかのアプリ・端末を落とさない）
 
   /** はじめ: 戻り → いまの札 → 前の画面の札 → ログインの画面 の順に見て、通れば onReady(email) */
   function start(onReady, ui) {

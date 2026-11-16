@@ -808,3 +808,10 @@ render();
   if (tok && tok.t && tok.exp > Date.now()) load(tok.t);
   else { store.del(TOKEN_KEY); showGate('会社の Google アカウントでログインしてください。'); }
 })();
+
+(function () {
+  try {
+    var r = localStorage.getItem('storeops_role_v1');
+    if (r && r !== 'hq' && r !== 'admin') { var a = document.getElementById('reportsLink'); if (a) a.remove(); }
+  } catch (e) { /* 読めなくても、窓口が断り、レポートの画面が自店のステータスへ案内する */ }
+})();

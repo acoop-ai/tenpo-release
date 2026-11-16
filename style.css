@@ -267,3 +267,21 @@ details.det .lz p{margin:.4rem 0;line-height:1.6}
 .guide1 section{scroll-margin-top:170px}
 .guide1 svg{max-width:100%;height:auto}
 .nctag{font-size:11px;font-weight:700;color:#7c2d12;background:#ffedd5;border-radius:999px;padding:0 6px;vertical-align:1px}
+/* 分析の札（2026-11-15 PO: 店の最初の画面は2つの分析の中身から。札で選んで、部門 → クラスへ同じ分析のまま掘る） */
+.tiles.an6{grid-template-columns:repeat(6,minmax(0,1fr))}
+.tile.an{cursor:pointer;transition:border-color .15s}
+.tile.an:hover{border-color:#94a3b8}
+.tile.an:focus-visible{outline:3px solid #60a5fa;outline-offset:2px}
+.tile .s2{font-size:12.5px;color:var(--sub);font-variant-numeric:tabular-nums;line-height:1.4;margin-top:1px}
+#ancards small{font-size:12.5px;font-weight:400;color:#e6eefb;margin-left:10px}
+.wlsw{display:flex;gap:6px;margin:0 0 6px;flex-wrap:wrap}
+.wlsw button{min-height:36px;padding:0 12px;border:1px solid var(--line);border-radius:18px;background:#fff;font-weight:700;font-size:14px;cursor:pointer}
+.wlsw button[aria-pressed="true"]{background:var(--brand);color:#fff;border-color:var(--brand)}
+.drill.an .drow .val{font-size:12.5px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar.spk svg{position:absolute;left:0;top:-1px;width:100%;height:20px}
+@media (max-width:1100px){.tiles.an6{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:760px){.tiles.an6{grid-template-columns:repeat(2,minmax(0,1fr))}#ancards small{display:block;margin:2px 0 0}}
+.bar .ci{position:absolute;top:8px;height:2px;background:#1f2933;opacity:.6}
+.chips a.chip{display:inline-flex;align-items:center;min-height:36px;padding:0 12px;border:1px solid var(--line);border-radius:18px;background:#fff;font-weight:700;font-size:14px;color:var(--brand);text-decoration:none;margin:0 6px 6px 0}
+.chips a.chip:hover{border-color:var(--brand)}
+.drill.an .drow .n small.nctag{margin-left:4px}

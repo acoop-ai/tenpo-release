@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-ZLNdaCs7Vyi5pvMAfA7XYWfb7+3gINzvaElHCf+RNFI=' 'sha256-JNTerc/2DKEvMNZddzzKv0xUTA53JJ8eKPzFvzGEEpk=' 'sha256-nfZ1cOZwwLa5t2WBlOYB8wnLDeR3y7SOVhxUI2yXWKQ='; style-src 'sha256-8oXxVot/eeCXCGa7uitoyBEcwpgfS6uC45V5+/ZvL/I='; img-src data:; connect-src https://script.google.com https://script.googleusercontent.com; frame-src 'self' blob:; base-uri 'none'; object-src 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-ZLNdaCs7Vyi5pvMAfA7XYWfb7+3gINzvaElHCf+RNFI=' 'sha256-JNTerc/2DKEvMNZddzzKv0xUTA53JJ8eKPzFvzGEEpk=' 'sha256-ljyZp1NORDplf6yeeyNlIIB4a67JneaNQF9z+csWz7c='; style-src 'sha256-8oXxVot/eeCXCGa7uitoyBEcwpgfS6uC45V5+/ZvL/I='; img-src data:; connect-src https://script.google.com https://script.googleusercontent.com; frame-src 'self' blob:; base-uri 'none'; object-src 'none'; form-action 'none'">
 <title>分析レポート</title>
 <script>// Google から戻ったアドレスの # 以降（ログインの札）を、ほかの台本より先に取り出してアドレスから消す。
 // 消さないと、履歴・画面のアドレス欄に札が残る。取り出した値は app.js が合言葉（state）と照らしてから使う
@@ -181,7 +181,7 @@ body.viewing .page,body.viewing .foot{display:none}
 //   合言葉の頭（report-）を見て、札に触らずこの画面へ渡す（戻り先の登録を増やさないため）。
 (function () {
   'use strict';
-  var WEB_BUILD = 'report-web-2026-11-11b';
+  var WEB_BUILD = 'report-web-2026-11-15a';
   var cfg = window.REPORT_CONFIG || {};
   var TOKEN_KEY = 'storeops_token_v1';            // { t: 札, exp: 期限 }（辞書と同じ札）
   var STATE_KEY = 'storeops_report_state_v1';     // [{ s: 合言葉, t: 出した時刻, h: ログイン前に見ていた所 }]
@@ -332,6 +332,7 @@ body.viewing .page,body.viewing .foot{display:none}
       if (!data || !data.ok) {
         if (data && data.auth) { store.del(TOKEN_KEY); throw new ApiError(data.error || 'ログインの期限が切れました。もう一度ログインしてください。', 'auth'); }
         if (data && data.changed) throw new ApiError(data.error || 'レポートが新しい版に入れ替わりました。', 'changed');
+        if (data && data.denied) throw new ApiError(data.error || '分析レポートは本部の方だけが見られます。', 'denied');   // 役目で断られた（やり直しても変わらない）＝自店のステータスへ案内する
         // retry の印＝窓口の一時的な失敗（やり直せば通る）。無いのは、やり直しても変わらない断り
         throw new ApiError((data && data.error) || '処理できませんでした。', data && data.retry ? 'net' : 'refused');
       }
@@ -409,6 +410,8 @@ body.viewing .page,body.viewing .foot{display:none}
     els.login.textContent = button ? button.label : 'Google でログイン';
     els.login.onclick = button ? button.onclick : login;
   }
+  /** 役目で断られたとき（店のアカウントなど）: やり直しを促さず、自店のステータス（辞書のいちばん上）へ案内する */
+  function showDenied(text) { showGate(text, true, { label: '← 自店のステータスへ', onclick: function () { location.href = '../'; } }); }
   function showSkeleton() {
     setBar('gate');
     els.gate.hidden = true; hideViewer(false); els.list.hidden = false;
@@ -451,6 +454,7 @@ body.viewing .page,body.viewing .foot{display:none}
     }).catch(function (e) {
       clearTimeout(slow);
       if (e.kind === 'auth') { showGate(e.message, true); return; }
+      if (e.kind === 'denied') { showDenied(e.message); return; }
       showGate(e.message + ' もう一度お試しください。', true, { label: 'もう一度読み込む', onclick: function () { if (token()) loadList(); else login(); } });
     });
   }
@@ -532,6 +536,7 @@ body.viewing .page,body.viewing .foot{display:none}
       if (e.kind === 'abort') return;
       if (e.kind === 'auth') { showGate(e.message, true); return; }
       if (e.kind === 'changed') { loadList(); return; }   // 新しい版の一覧を受け取り直す（押し直してもらう）
+      if (e.kind === 'denied') { showDenied(e.message); return; }
       if (from === 'link' && current) { hideCover(); toast('「' + item.title + '」を読み込めませんでした。' + (e.message || '') + ' 一覧から開き直してください。'); }
     });
   }
