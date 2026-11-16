@@ -290,10 +290,10 @@ details.det .lz p{margin:.4rem 0;line-height:1.6}
 .drow.dc:hover{background:var(--dbg);filter:brightness(.965)}
 .drow.open{box-shadow:inset 4px 0 0 var(--dac,#1f4f8f),inset 0 -2px 0 var(--dac,#1f4f8f)}
 .drow.open .ar{color:var(--dac,var(--brand))}
-.drow.sub .n{padding-left:calc(var(--dep,1) * 1.3em);font-weight:600}
-.drill .grp.sub{margin-left:calc(var(--dep,1) * 1.3em)}
+.drow.sub .n{padding-left:calc(var(--dep,1) * 2.2em);font-weight:600}
+.drill .grp.sub{margin-left:calc(var(--dep,1) * 2.2em)}
 .drill .hint.wait{padding-left:calc(var(--dep,0) * 1.3em)}
-.dopen{padding:2px 0 8px calc(var(--dep,1) * 1.3em + 18px);background:var(--dbg,transparent);box-shadow:inset 4px 0 0 var(--dac,transparent);border-bottom:1px solid #eef2f7}
+.dopen{padding:2px 0 8px calc(var(--dep,1) * 2.2em + 18px);background:var(--dbg,transparent);box-shadow:inset 4px 0 0 var(--dac,transparent);border-bottom:1px solid #eef2f7}
 .dopen button,table.t tr.topen button{border:0;background:none;color:var(--brand);font-weight:700;cursor:pointer;padding:4px 0;font-size:13.5px;text-decoration:underline;text-underline-offset:3px;min-height:32px;font-family:inherit}
 .drill .lg .dcsw{width:24px;background:linear-gradient(90deg,#2f855a 0 4px,#ecf6ee 4px 100%);border:1px solid #d5dde8}
 .drill.tm .tw{margin-top:8px}
@@ -302,6 +302,20 @@ table.t tr.dr.dc td:first-child{background:var(--dbg);box-shadow:inset 4px 0 0 v
 table.t tr.dr td.hm{min-width:3.4em;text-align:center}
 table.t tr.dr td small{color:var(--sub);font-weight:400;margin-left:4px}
 table.t .tn{border:0;background:none;font:inherit;font-weight:700;color:inherit;cursor:pointer;padding:2px 0;text-align:left;min-height:30px}
-table.t tr.dr.sub td:first-child .tn{padding-left:calc(var(--dep,1) * 1.2em);font-weight:600}
-table.t tr.tgrp td{font-size:12.5px;font-weight:800;color:#0b3a7e;background:#f3f6fa;padding-left:calc(var(--dep,0) * 1.2em + 9px)}
-table.t tr.topen td{background:var(--dbg,#fff);padding-left:calc(var(--dep,1) * 1.2em + 9px)}
+table.t tr.dr.sub td:first-child .tn{padding-left:calc(var(--dep,1) * 2em);font-weight:600}
+table.t tr.tgrp td{font-size:12.5px;font-weight:800;color:#0b3a7e;background:#f3f6fa;padding-left:calc(var(--dep,0) * 2em + 9px)}
+table.t tr.topen td{background:var(--dbg,#fff);padding-left:calc(var(--dep,1) * 2em + 9px)}
+/* 11/16 夕方: 中の行のつながりの線（└）・見る範囲（部門）の札・図の上の凡例（棒と点線の意味） */
+.drow.sub .n .ar::before,table.t tr.dr.sub .tn::before{content:"└";color:var(--dac,#94a3b8);font-weight:400;margin-right:4px}
+.dsel{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin:4px 0 12px}
+.dsel .lb{font-size:13px;color:var(--sub);font-weight:700;margin-right:2px}
+.dsel button{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 13px;border:1px solid var(--line);border-radius:18px;background:#fff;font:inherit;font-size:14px;font-weight:700;color:#1f2933;cursor:pointer}
+.dsel button i{width:10px;height:10px;border-radius:50%;background:var(--dac,#94a3b8)}
+.dsel button[aria-pressed="true"]{background:var(--dbg,#e8f0fb);border-color:var(--dac,var(--brand));box-shadow:inset 0 0 0 1px var(--dac,var(--brand))}
+.dsel button:hover{border-color:var(--dac,var(--brand))}
+.blg{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--sub);margin:2px 0 4px}
+.blg i{display:inline-block;vertical-align:-1px;margin-right:5px}
+.blg i.sb{width:10px;height:10px;border-radius:2px;background:linear-gradient(90deg,#5b8fd6 50%,#e07a6e 50%)}
+.blg i.sd{width:18px;height:0;border-top:2px dashed #7c3aed;vertical-align:3px}
+
+:root{--css-build:"status-web-2026-11-16b"}

@@ -166,8 +166,16 @@
     var st = meta().st, h = '', hq = ME.role === 'hq' || ME.role === 'admin';
     h += '<h1 class="vt" id="lvtop">' + esc(n.lv === 0 ? n.n + 'のいま' : n.n) + '<small>' + esc(LVNM[n.lv]) + '｜' + esc(st.ar || '') + '・' + esc(st.ty || '') + (n.lv ? '｜' + esc(st.nm) : '') + '</small>' +
       (hq && n.lv === 0 ? '<button type="button" class="hbtn" data-view="home-map" style="margin-left:auto">← 全体の地図へ</button>' : '') + '</h1>';
-    h += tiles(n) + (S.an === 'yo' ? aiBox(n) : anBox(n)) + drill(n) + anFig(n) + details(n);
+    h += deptBar() + tiles(n) + (S.an === 'yo' ? aiBox(n) : anBox(n)) + drill(n) + anFig(n) + details(n);
     return h;
+  }
+  /** 見る範囲（部門）の札（PO 11/16「冒頭の分析の時点で、部門ごとに切り替えができたほうが良い」）。押すと、分析の札・AI のコメント・掘り下げ・この段の図が、その部門に替わる */
+  function deptBar() {
+    var st = N().S; if (!st || !st.ch || !st.ch.length) return '';
+    var curD = S.path.length > 1 ? S.path[1] : 'S';
+    var b = function (id, nm, c) { var on = id === curD; return '<button type="button" data-dsel="' + esc(id) + '" aria-pressed="' + on + '"' + (c ? ' style="--dbg:' + c[0] + ';--dac:' + c[1] + '"' : '') + '>' + (c ? '<i aria-hidden="true"></i>' : '') + esc(nm) + '</button>'; };
+    return '<div class="dsel" role="group" aria-label="見る範囲（部門）"><span class="lb">見る範囲</span>' + b('S', '店全体', null) +
+      st.ch.map(function (id) { var d = N()[id]; return d ? b(id, d.n, DEPT_COL[d.n]) : ''; }).join('') + '</div>';
   }
   function ruleTxt(peer, area, rank, cnt, fmt, lowGood) {
     if (nc()) return '';   // ほかの店と比べない店は、物差しの行を出さない
@@ -277,7 +285,7 @@
       if (!W) body = '<p class="hint">この段には、雨の日の数がありません。</p>';
       else {
         var vals = [0, 1].map(function (i) { return W[i] && isFinite(W[i][0]) ? W[i][0] : NaN; }), mk = nc() ? null : [0, 1].map(function (i) { return W[i] ? (isFinite(W[i][1]) ? W[i][1] : W[i][2]) : NaN; });
-        body = figt('雨の日の' + mname(S.m, n) + '（ふだんの同じ曜日との差・%）') + bars(vals, ['雨（10mm〜）', '強い雨（30mm〜）'], { base: 0, fmt: function (x) { return sg(x) + '%'; }, mark: mk, unit: '%', title: '雨の日の効き' }) +
+        body = figt('雨の日の' + mname(S.m, n) + '（ふだんの同じ曜日との差・%）') + bars(vals, ['雨（10mm〜）', '強い雨（30mm〜）'], { base: 0, fmt: function (x) { return sg(x) + '%'; }, mark: mk, markName: '同じ型の店の中央（無いときはエリアの中央）', barName: n.lv === 0 ? 'この店' : n.n, unit: '%', title: '雨の日の効き' }) +
           '<p class="hint">青＝ふだんより多い・赤＝少ない。' + (mk ? '紫の点線＝同じ型の店の中央（無いときはエリアの中央）。' : esc(NC_NOTE)) + '雨の日の買い方（重い物・かさばる物が後回し など）は、上の帯の「天気と売れ方」で見られます。</p>';
       }
     } else if (S.an === 'tm') body = LAZY.dow(n) + LAZY.hour(n);
@@ -445,16 +453,22 @@
   function lazyDet(id, title, kind) { return '<details class="det" id="' + id + '" data-lazy="' + kind + '"><summary>' + esc(title) + '</summary><div class="lz"></div></details>'; }
   var DOWS = ['月', '火', '水', '木', '金', '土', '日'], DOW8 = ['月', '火', '水', '木', '金', '土', '日', '祝'];
   function figt(t) { return '<p class="figt">' + esc(t) + '</p>'; }
-  function bars(vals, labs, o) {   // 縦の棒（同じ目盛り・0 か基準の線から）。o: { base, fmt, mark〈比べる相手の値の並び〉, unit }
+  function bars(vals, labs, o) {   // 縦の棒（同じ目盛り・0 か基準の線から）。o: { base, fmt, mark〈比べる相手の値の並び〉, markName・barName〈図の上の凡例〉, unit }
+    var hasMk = !!(o.mark && o.mark.some(isFinite));
+    var lgd = hasMk && o.markName ? '<div class="blg"><span><i class="sb" aria-hidden="true"></i>棒＝' + esc(o.barName || 'この段') + '</span><span><i class="sd" aria-hidden="true"></i>点線＝' + esc(o.markName) + '</span></div>' : '';
+    return lgd + barsSvg(vals, labs, o);
+  }
+  function barsSvg(vals, labs, o) {
     var W = Math.max(320, labs.length * 58), H = 190, pad = 34, base = o.base || 0, fin = vals.concat(o.mark || []).filter(isFinite);
     if (!fin.length) return '<p class="hint">数がありません。</p>';
     var lo = Math.min(base, Math.min.apply(null, fin)), hi = Math.max(base, Math.max.apply(null, fin)), rg = (hi - lo) || 1; lo -= rg * 0.08; hi += rg * 0.12;
     var y = function (v) { return 18 + (H - pad - 18) * (1 - (v - lo) / (hi - lo)); }, bw = (W - 40) / labs.length;
     var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="' + esc(o.title || '図') + '" data-u="' + esc(o.unit || '') + '"><line x1="30" x2="' + (W - 6) + '" y1="' + y(base) + '" y2="' + y(base) + '" stroke="#334155" stroke-width="1.5"/>';
     vals.forEach(function (v, i) {
-      var x = 34 + i * bw, top = Math.min(y(v), y(base)), hgt = Math.abs(y(v) - y(base));
-      if (isFinite(v)) s += '<rect x="' + (x + bw * 0.18) + '" y="' + top + '" width="' + (bw * 0.64) + '" height="' + Math.max(1, hgt) + '" rx="3" fill="' + (v >= base ? '#5b8fd6' : '#e07a6e') + '"/><text x="' + (x + bw / 2) + '" y="' + (v >= base ? top - 4 : top + hgt + 13) + '" font-size="12" text-anchor="middle" fill="#1f2933">' + esc(o.fmt(v)) + '</text>';
-      if (o.mark && isFinite(o.mark[i])) s += '<line x1="' + (x + bw * 0.1) + '" x2="' + (x + bw * 0.9) + '" y1="' + y(o.mark[i]) + '" y2="' + y(o.mark[i]) + '" stroke="#7c3aed" stroke-width="2" stroke-dasharray="4 3"/>';
+      var x = 34 + i * bw, top = Math.min(y(v), y(base)), hgt = Math.abs(y(v) - y(base)), mk = o.mark ? o.mark[i] : NaN;
+      var ty = v >= base ? Math.min(top, isFinite(mk) ? y(mk) : top) - 5 : Math.max(top + hgt, isFinite(mk) ? y(mk) : 0) + 14;   // 数の字は、点線と重ならない側に
+      if (isFinite(v)) s += '<rect x="' + (x + bw * 0.18) + '" y="' + top + '" width="' + (bw * 0.64) + '" height="' + Math.max(1, hgt) + '" rx="3" fill="' + (v >= base ? '#5b8fd6' : '#e07a6e') + '"/><text x="' + (x + bw / 2) + '" y="' + ty + '" font-size="12" text-anchor="middle" fill="#1f2933">' + esc(o.fmt(v)) + '</text>';
+      if (isFinite(mk)) s += '<line x1="' + (x + bw * 0.1) + '" x2="' + (x + bw * 0.9) + '" y1="' + y(mk) + '" y2="' + y(mk) + '" stroke="#7c3aed" stroke-width="2" stroke-dasharray="4 3"><title>' + esc((o.markName || '比べる相手') + ' ' + o.fmt(mk)) + '</title></line>';
       s += '<text x="' + (x + bw / 2) + '" y="' + (H - 12) + '" font-size="13" text-anchor="middle" fill="#334155">' + esc(labs[i]) + '</text>';
     });
     return '<div class="yr">' + s + '</svg></div>';
@@ -463,8 +477,9 @@
     dow: function (n) {
       var m = S.m, v = m === 'a' ? n.dw : (n.dwm && n.dwm[m]);
       if (!v) return '<p class="hint">この段には、曜日の数がありません。</p>';
-      return figt('曜日の指数（' + mname(m, n) + '・ふだん＝1.00・倍）') + bars(v, DOWS, { base: 1, fmt: function (x) { return x.toFixed(2); }, mark: m === 'a' ? n.da : null, unit: '倍', title: '曜日の指数' }) +
-        '<p class="hint">青＝ふだんより多い曜日・赤＝少ない曜日。' + (m === 'a' && n.da ? '紫の点線＝エリアの同じ段の指数。' : '') + '作る量・発注・人の手当ては、曜日の型に合わせて決める（祝日・行事の日は別に考える）。</p>';
+      var ar = (meta().st && meta().st.ar) || 'エリア', dn = n.lv === 0 ? '店' : n.lv === 1 ? '部門' : '中分類';
+      return figt('曜日の指数（' + mname(m, n) + '・ふだん＝1.00・倍）') + bars(v, DOWS, { base: 1, fmt: function (x) { return x.toFixed(2); }, mark: m === 'a' ? n.da : null, markName: ar + '全体' + (n.lv === 0 ? '' : 'の、同じ' + dn) + 'の曜日の指数（エリアの店を合わせた形。予算・前年ではありません）', barName: n.lv === 0 ? 'この店' : n.n, unit: '倍', title: '曜日の指数' }) +
+        '<p class="hint">青＝ふだんより多い曜日・赤＝少ない曜日。作る量・発注・人の手当ては、曜日の型に合わせて決める（祝日・行事の日は別に考える）。</p>';
     },
     hour: function (n) {
       var m = S.m === 'u' ? 'a' : S.m, H = n.h && n.h[m];
@@ -609,7 +624,7 @@
     // ① 自店（店の人・本部が店を開いているとき）: 来客数で、雨と強い雨。物差しは同じ型の店の中央
     if (st && st.wxs && st.wxs.c) {
       var C = st.wxs.c, vals = [0, 1].map(function (i) { return C[i] && isFinite(C[i][0]) ? C[i][0] : NaN; }), mk = nc() ? null : [0, 1].map(function (i) { return C[i] ? (isFinite(C[i][1]) ? C[i][1] : C[i][2]) : NaN; });
-      h += '<div class="box wxme"><h3>' + esc(meta().st.nm) + 'の雨の日（来客数・ふだんの同じ曜日との差）</h3>' + bars(vals, ['雨（10mm〜）', '強い雨（30mm〜）'], { base: 0, fmt: function (x) { return sg(x) + '%'; }, mark: mk, unit: '%', title: '自店の雨の日の効き' }) +
+      h += '<div class="box wxme"><h3>' + esc(meta().st.nm) + 'の雨の日（来客数・ふだんの同じ曜日との差）</h3>' + bars(vals, ['雨（10mm〜）', '強い雨（30mm〜）'], { base: 0, fmt: function (x) { return sg(x) + '%'; }, mark: mk, markName: '同じ型の店の中央（無いときはエリアの中央）', barName: 'この店', unit: '%', title: '自店の雨の日の効き' }) +
         '<p class="hint">' + (mk ? '紫の点線＝同じ型の店の中央。' : esc(NC_NOTE)) + 'どの部門・クラスで減るかは、下のボタンで掘り下げて見られます。</p>' +
         '<div class="nx"><button type="button" data-anhome="wx">' + esc(meta().st.nm) + 'の雨の日の効きを、部門 → 中分類 → クラスまで見る ▸</button></div></div>';
     } else if (ME && ME.role === 'store') h += '<div class="box"><p style="margin:0">' + esc((CUR && DATA[CUR] && DATA[CUR].none) || 'この店の雨の日の数を読み込んでいます…') + '</p></div>';
@@ -875,6 +890,7 @@
       if (ds.wl != null) { go({ wl: +ds.wl }, { keep: true }); return; }
       if (ds.m) { go({ m: ds.m }, { keep: true }); return; }
       if (ds.tog) { toggleOpen(ds.tog); return; }   // 掘り下げの行: その場で開く・閉じる
+      if (ds.dsel) { if ((S.path.length > 1 ? S.path[1] : 'S') !== ds.dsel || S.path.length > 2) go({ view: 'status', path: ds.dsel === 'S' ? ['S'] : ['S', ds.dsel] }, { keep: true }); return; }   // 見る範囲（部門）: 分析の見方はそのまま、範囲だけ替える
       if (ds.drill) { drillTo(ds.drill); return; }
     });
     document.addEventListener('keydown', function (e) {
@@ -914,7 +930,20 @@
       loadDict();   // 辞書の中身と探す欄の読みの表を、裏で受け取る（型の選び・探すは、そのあと往復 0）
     }, function () { showGate('通信できませんでした。通信の状態を確かめて、もう一度お試しください。', true, function () { onReady(email); }); });   // 通信の失敗と、描く所の失敗を分けて知らせる
   }
+  /** 見た目のファイルが、この画面の版の物か（公開の直後に、古い見た目のファイルと組みで読まれたことがある・2026-11-16）。違えば、版の印つきで読み直す（1回だけ） */
+  function cssGuard() {
+    var want = (window.STOREOPS_CONFIG || {}).build; if (!want) return 'dev';
+    var got = getComputedStyle(document.documentElement).getPropertyValue('--css-build').replace(/["'\s]/g, '');
+    if (got === want) return 'ok';
+    var old = document.querySelector('link[rel="stylesheet"][href^="style.css"]'); if (!old || document.getElementById('cssfix')) return 'skip';
+    var l = document.createElement('link'); l.id = 'cssfix'; l.rel = 'stylesheet'; l.href = 'style.css?v=' + encodeURIComponent(want) + '&r=' + Date.now();
+    l.onload = function () { old.remove(); fhSchedule(); };
+    document.head.appendChild(l);
+    return 'reload';
+  }
+  window.STATUS_CSS = cssGuard;
   document.addEventListener('DOMContentLoaded', function () {
+    cssGuard();
     main = $('#main'); FH = $('#fh');
     document.documentElement.style.setProperty('--hdr', $('#hdr').offsetHeight + 'px');
     bind();
