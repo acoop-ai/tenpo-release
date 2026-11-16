@@ -354,5 +354,12 @@ table.t tr.dr td.pf{padding:2px 8px;line-height:0}
 .st.nodp{opacity:.55}
 /* 11/16 夜: 表の枠を横に送っても「〇〇だけを大きく開く」が枠の左に残る（列をまたぐ行は、セルでなく中のボタンを貼り付ける） */
 table.t tr.topen td button{position:sticky;left:9px}
+/* 11/16 夜（2）: 本部の冒頭＝全社の分析の札 → 比べる図（エリア → 店）。PO「全体俯瞰の結果が冒頭に無い」 */
+h3.mh{font-size:16px;margin:16px 0 6px;color:#0b3a7e;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+h3.mh small{font-size:12.5px;font-weight:400;color:var(--sub)}
+.drill .drow.mrow.area{font-weight:800;background:#f6f9fd}
+.drill .drow.mrow.nodp{opacity:.55}
+.drill .drow .bar.tmb{background:none;display:flex;align-items:center;overflow:hidden}
+.drill .drow .bar.tmb svg{display:block}
 
-:root{--css-build:"status-web-2026-11-16e"}
+:root{--css-build:"status-web-2026-11-16f"}
