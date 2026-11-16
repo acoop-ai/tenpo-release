@@ -52,11 +52,19 @@
 
   // ── 見方と戻る（場所の移動と見方の変化を、同じ履歴に積む）
   // an＝見る分析（2026-11-15 PO: 店の最初の画面は2つの分析の中身から。札で選び、部門 → 中分類 → クラスへ同じ分析のまま掘る）。wl＝雨の強さ（0＝雨 10mm〜・1＝強い雨 30mm〜）
-  var S = { view: 'home', path: ['S'], m: 'a', an: 'yo', wl: 0 };
+  // open＝掘り下げで、その場で開いた行（PO 11/16「部門を選ぶと別画面に飛ばされて、今どこにいるかわからなくなる」→ 押した行のすぐ下に中を開く）。段（path）が替われば閉じる
+  var S = { view: 'home', path: ['S'], m: 'a', an: 'yo', wl: 0, open: [] };
   var HIST = [];
-  function snap() { return JSON.stringify({ view: S.view, path: S.path, m: S.m, an: S.an, wl: S.wl, c: CUR, y: window.scrollY }); }
-  function go(ch, how) { HIST.push(snap()); if (HIST.length > 200) HIST.shift(); for (var k in ch) S[k] = ch[k]; render(how || {}); }
-  function back() { if (!HIST.length) return; var o = JSON.parse(HIST.pop()), y = o.y, c = o.c; delete o.y; delete o.c; for (var k in o) S[k] = o[k]; if (c !== CUR) useStore(c); render({ y: y, msg: '← 元の見方に戻りました' }); }
+  function snap() { return JSON.stringify({ view: S.view, path: S.path, m: S.m, an: S.an, wl: S.wl, open: S.open, c: CUR, y: window.scrollY }); }
+  function go(ch, how) { HIST.push(snap()); if (HIST.length > 200) HIST.shift(); for (var k in ch) S[k] = ch[k]; if ('path' in ch && !('open' in ch)) S.open = []; render(how || {}); }
+  function back() { if (!HIST.length) return; var o = JSON.parse(HIST.pop()), y = o.y, c = o.c; delete o.y; delete o.c; for (var k in o) S[k] = o[k]; if (!o.open) S.open = []; if (c !== CUR) useStore(c); render({ y: y, msg: '← 元の見方に戻りました' }); }
+  // 部門の色（行の地の淡い色＋左の帯）。🔴 正は作業フォルダの `_共通\部門の色\dept_colors.json`（ヒッスルの部門の名前とも対）。ここは写し・手で直さない（試験が正と照らす）
+  // >>> 部門の色 写しここから
+  var DEPT_COL = { '青果': ['#ecf6ee', '#2f855a'], '精肉': ['#fbefe8', '#a8552e'], '水産': ['#e6f3f4', '#0e7c86'], '惣菜': ['#fdf2df', '#b7650b'], '日配': ['#f0edfa', '#6a4fb6'], '一般食品': ['#f3f2e0', '#77701d'], '菓子': ['#fbecf3', '#b03a74'], '日雑': ['#eef1f5', '#566377'] };
+  // <<< 部門の色 写しここまで
+  function deptOf(n) { var x = n, g = 0; while (x && x.lv > 1 && g++ < 8) x = N()[x.p]; return x && x.lv === 1 ? x : null; }
+  function dcOf(n) { var d = deptOf(n); return d ? DEPT_COL[d.n] || null : null; }
+  function dcStyle(n, dep) { var c = dcOf(n); return (c ? '--dbg:' + c[0] + ';--dac:' + c[1] + ';' : '') + (dep ? '--dep:' + dep + ';' : ''); }
 
   // ── 描く
   var main = null;
@@ -289,34 +297,91 @@
   function drill(n) {
     if (!hasKids(n)) return '<h2 class="sec" id="dig">掘り下げる</h2><div class="drill"><div class="hint">いちばん下の段（クラス）です。</div></div>';
     if (!kidsReady(n)) { ensureTree(); return '<h2 class="sec" id="dig">掘り下げる</h2><div class="drill"><div class="hint wait"><span class="spin" aria-hidden="true"></span>この店の中の数を読み込んでいます…</div></div>'; }
+    if (S.an === 'tm') return drillTm(n);
     if (S.an !== 'yo') return drillAn(n);
-    var k = kids(n), m = S.m, pd = myo(n, m);
-    var vals = k.map(function (x) { return myo(x.n, m); }).filter(isFinite);
+    var k = kids(n), m = S.m, pd = myo(n, m), V = visRows(n);
+    var vals = V.filter(function (r) { return r.x; }).map(function (r) { return myo(r.x.n, m); }).filter(isFinite);
     var R = Math.min(30, Math.max(10, Math.ceil(Math.max.apply(null, vals.concat([isFinite(pd) ? pd : 0]).map(Math.abs)) / 5) * 5));
     var pos = function (d) { return 50 + Math.max(-R, Math.min(R, d)) / R * 50; };
-    var lastG = null, rows = '';
-    k.forEach(function (x) {
-      if (x.g && x.g !== lastG) { lastG = x.g; rows += '<div class="grp">' + esc(x.g) + '</div>'; }
-      var d = myo(x.n, m), p = pos(d), b = !isFinite(d) ? '' : d >= 0 ? '<i class="u" style="left:50%;width:' + (p - 50) + '%"></i>' : '<i class="d" style="left:' + p + '%;width:' + (50 - p) + '%"></i>';
+    var rows = V.map(function (r) {
+      if (!r.x) return rowExtra(r);
+      var x = r.x, d = myo(x.n, m), p = pos(d), b = !isFinite(d) ? '' : d >= 0 ? '<i class="u" style="left:50%;width:' + (p - 50) + '%"></i>' : '<i class="d" style="left:' + p + '%;width:' + (50 - p) + '%"></i>';
       var cut = Math.abs(d) > R ? '<span class="cut ' + cls(d) + '" style="' + (d > 0 ? 'right:0' : 'left:0') + '">' + (d > 0 ? '›' : '‹') + '</span>' : '';
-      var leaf = !hasKids(x.n);
-      rows += '<button type="button" class="drow' + (leaf ? ' leaf' : '') + '" data-drill="' + esc(x.id) + '" title="押すと、' + esc(x.n.n) + 'の中が開きます"><span class="n"><span class="ar">' + (leaf ? '・' : '▶') + '</span><span>' + esc(x.n.n) + '</span></span>' +
-        '<span class="val">' + num(mval(x.n, m), m === 'a' ? 1 : 0) + '</span><span class="bar" aria-hidden="true"><span class="zl"></span>' + (isFinite(pd) ? '<span class="pl" style="left:' + pos(pd) + '%"></span>' : '') + b + cut + '</span><span class="pct ' + cls(d) + '">' + sg(d) + '%</span></button>';
-    });
-    return '<h2 class="sec" id="dig">掘り下げる — ' + esc(KIDNM[n.lv] || 'クラス') + 'ごと</h2><div class="drill"><div class="lg"><span>' + esc(mname(m, k[0].n)) + '（' + esc(MK[m].u) + '）と、前年からの増減</span><span><i style="background:#5b8fd6"></i>前年より多い</span><span><i style="background:#e07a6e"></i>少ない</span><span><i style="border-left:2px dashed #7c3aed;width:0"></i>' + esc(n.n) + '全体（' + sg(pd) + '%）</span><span>目盛りの端 ±' + R + '%</span></div>' + rows + '</div>' +
-      '<div class="hint">行を押すと、その中が開きます。戻るときは、上の「1段上へ」か「← ひとつ前に戻る」。</div>';
+      return rowBtn(r, '<span class="val">' + num(mval(x.n, m), m === 'a' ? 1 : 0) + '</span><span class="bar" aria-hidden="true"><span class="zl"></span>' + (isFinite(pd) ? '<span class="pl" style="left:' + pos(pd) + '%"></span>' : '') + b + cut + '</span><span class="pct ' + cls(d) + '">' + sg(d) + '%</span>');
+    }).join('');
+    return '<h2 class="sec" id="dig">掘り下げる — ' + esc(KIDNM[n.lv] || 'クラス') + 'ごと</h2><div class="drill"><div class="lg"><span>' + esc(mname(m, k[0].n)) + '（' + esc(MK[m].u) + '）と、前年からの増減</span><span><i style="background:#5b8fd6"></i>前年より多い</span><span><i style="background:#e07a6e"></i>少ない</span><span><i style="border-left:2px dashed #7c3aed;width:0"></i>' + esc(n.n) + '全体（' + sg(pd) + '%）</span><span>目盛りの端 ±' + R + '%</span>' + DC_LG + '</div>' + rows + '</div>' + DRILL_HINT;
   }
-  /** 選んだ分析で掘る（雨の日の効き・広告・52週MD・ロス・曜日）。行どうし同じ目盛り・押すと同じ分析のまま1段下へ */
+  // ── 掘り下げの行（PO 11/16）: 押すと、その行のすぐ下に中が開く（もう一度押すと閉じる）。別の画面へは「〇〇だけを大きく開く」で。部門ごとに淡い地の色
+  var DC_LG = '<span><i class="dcsw" aria-hidden="true"></i>行の地の色・左の帯＝部門の印（増え減りの色ではありません）</span>';
+  var DRILL_HINT = '<div class="hint">行を押すと、すぐ下にその中が開きます（もう一度押すと閉じる）。その段だけを大きく見るときは「〇〇だけを大きく開く」。「―」はその段に数が無い所（0 ではありません）。</div>';
+  function openOf() { var o = {}; (S.open || []).forEach(function (id) { o[id] = 1; }); return o; }
+  /** 見えている行（深さつき）: 開いた行の下に、その中の行。小分類は区切りの行 */
+  function visRows(n) {
+    var out = [], O = openOf();
+    (function walk(p, dep) {
+      var lastG = null;
+      kids(p).forEach(function (x) {
+        if (x.g && x.g !== lastG) { lastG = x.g; out.push({ grp: x.g, dep: dep }); }
+        var op = !!O[x.id] && hasKids(x.n);
+        out.push({ x: x, dep: dep, open: op });
+        if (op) { if (kidsReady(x.n)) { walk(x.n, dep + 1); out.push({ end: x, dep: dep + 1 }); } else out.push({ wait: true, dep: dep + 1 }); }
+      });
+    })(n, 0);
+    return out;
+  }
+  function rowBtn(r, inner) {
+    var x = r.x, leaf = !hasKids(x.n), c = dcOf(x.n), st = dcStyle(x.n, r.dep);
+    return '<button type="button" class="drow' + (leaf ? ' leaf' : '') + (c ? ' dc' : '') + (r.dep ? ' sub' : '') + (r.open ? ' open' : '') + '" data-id="' + esc(x.id) + '"' + (st ? ' style="' + st + '"' : '') +
+      (leaf ? ' title="' + esc(x.n.n) + '（いちばん下の段）"' : ' data-tog="' + esc(x.id) + '" aria-expanded="' + r.open + '" title="押すと、すぐ下に' + esc(x.n.n) + 'の中が開きます（もう一度押すと閉じます）"') +
+      '><span class="n"><span class="ar">' + (leaf ? '・' : r.open ? '▼' : '▶') + '</span><span>' + esc(x.n.n) + '</span></span>' + inner + '</button>';
+  }
+  function rowExtra(r) {
+    if (r.grp) return '<div class="grp' + (r.dep ? ' sub' : '') + '" style="--dep:' + r.dep + '">' + esc(r.grp) + '</div>';
+    if (r.wait) return '<div class="hint wait" style="--dep:' + r.dep + '"><span class="spin" aria-hidden="true"></span>読み込んでいます…</div>';
+    if (r.end) return '<div class="dopen" style="' + dcStyle(r.end.n, r.dep) + '"><button type="button" data-drill="' + esc(r.end.id) + '">' + esc(r.end.n.n) + 'だけを大きく開く（AI のコメント・この段の図）▸</button></div>';
+    return '';
+  }
+  function toggleOpen(id) {
+    var o = (S.open || []).slice(), i = o.indexOf(id);
+    if (i >= 0) o = o.filter(function (j) { if (j === id) return false; var x = N()[j], g = 0; while (x && x.p && g++ < 8) { if (x.p === id) return false; x = N()[x.p]; } return true; });   // 閉じるときは、その中で開いていた行も閉じる
+    else o.push(id);
+    go({ open: o }, { keep: true });
+  }
+  /** 曜日の指数の掘り下げ（PO 11/16「このグラフでは何見てるかわからない」→ 部門 × 曜日の表。数と色の濃さ・見出しに曜日） */
+  function drillTm(n) {
+    var V = visRows(n), K = KIDNM[n.lv] || 'クラス', mt = 0.1, L = 7;
+    V.forEach(function (r) { if (!r.x) return; var dw = dwOf(r.x.n); if (dw) { L = Math.max(L, dw.length); dw.forEach(function (y) { if (isFinite(y)) mt = Math.max(mt, Math.abs(y - 1)); }); } });
+    var cols = DOW8.slice(0, Math.min(8, L)), span = cols.length + 2;
+    var cell = function (v) {
+      if (!isFinite(v)) return '<td class="n hm">―</td>';
+      var a = Math.min(1, Math.abs(v - 1) / mt) * 0.55, c = v >= 1 ? '91,143,214' : '224,122,110';
+      return '<td class="n hm" style="background:rgba(' + c + ',' + a.toFixed(2) + ')">' + v.toFixed(2) + '</td>';
+    };
+    var body = V.map(function (r) {
+      if (r.grp) return '<tr class="tgrp"><td colspan="' + span + '" style="--dep:' + r.dep + '">' + esc(r.grp) + '</td></tr>';
+      if (r.wait) return '<tr><td colspan="' + span + '">読み込んでいます…</td></tr>';
+      if (r.end) return '<tr class="topen"><td colspan="' + span + '" style="' + dcStyle(r.end.n, r.dep) + '"><button type="button" data-drill="' + esc(r.end.id) + '">' + esc(r.end.n.n) + 'だけを大きく開く ▸</button></td></tr>';
+      var x = r.x, dw = dwOf(x.n), hi = maxAt(dw), lo = minAt(dw), leaf = !hasKids(x.n), c = dcOf(x.n), st = dcStyle(x.n, r.dep);
+      var nm = leaf ? '<span class="tn">・' + esc(x.n.n) + '</span>' : '<button type="button" class="tn" data-tog="' + esc(x.id) + '" aria-expanded="' + r.open + '" title="押すと、すぐ下に' + esc(x.n.n) + 'の中が開きます">' + (r.open ? '▼ ' : '▶ ') + esc(x.n.n) + '</button>';
+      return '<tr class="dr' + (c ? ' dc' : '') + (r.dep ? ' sub' : '') + '" data-id="' + esc(x.id) + '"' + (st ? ' style="' + st + '"' : '') + '><td>' + nm + '</td>' +
+        (dw ? cols.map(function (_, i) { return cell(dw[i]); }).join('') : '<td class="n" colspan="' + cols.length + '">―</td>') +
+        '<td>' + (hi >= 0 ? '<b>' + dayNm(hi) + '</b>' + (lo >= 0 && lo !== hi ? '<small>（少ない ' + dayNm(lo) + '）</small>' : '') : '―') + '</td></tr>';
+    }).join('');
+    var head = ['名前'].concat(cols).concat(['多い曜日']);
+    return '<h2 class="sec" id="dig">掘り下げる — ' + esc(K) + 'ごとの曜日の指数</h2><div class="drill an tm"><div class="lg"><span>曜日ごとの' + esc(mname(S.m, n)) + '（ふだんの日＝1.00・倍）</span><span><i style="background:#5b8fd6"></i>ふだんより多い（濃いほど多い）</span><span><i style="background:#e07a6e"></i>少ない</span>' + DC_LG + '</div>' +
+      table(head, body, V.length > 14) + '</div>' + DRILL_HINT;
+  }
+  /** 選んだ分析で掘る（雨の日の効き・広告・52週MD・ロス）。行どうし同じ目盛り・押すと、すぐ下に同じ分析のまま中が開く */
   function drillAn(n) {
-    var k = kids(n), an = S.an, K = KIDNM[n.lv] || 'クラス', cmp = !nc();
+    var k = kids(n), an = S.an, K = KIDNM[n.lv] || 'クラス', cmp = !nc(), VR = visRows(n);
     var val = function (x) {
       if (an === 'wx') { var w = wxv(x, S.wl), o = wxv(x, 1 - S.wl); return w ? { d: w[0], md: cmp ? (isFinite(w[1]) ? w[1] : w[2]) : NaN, t: sg(w[0]) + '%', t2: o ? (S.wl ? '雨 ' : '強い雨 ') + sg(o[0]) + '%' : '' } : null; }
       if (an === 'ad') { var a = x.ad; return a && isFinite(a.L) ? { d: a.L, t: num(a.L, 2) + '倍', t2: num(a.nc) + '件' } : null; }
       if (an === 'ls') { var l = x.ls; return l ? { d: l[2], md: cmp && x.lp ? x.lp[0] : NaN, t: num(l[2], 1) + '%', t2: '見切り ' + num(l[0], 1) + '・廃棄 ' + num(l[1], 1) } : null; }
       if (an === 'md') { var f = x.m5; return f && f.n ? { d: f.down / f.n * 100, f: f, t: f.down + '/' + f.n + '回', t2: '上回り ' + f.up } : null; }
-      var dw = dwOf(x), hi = maxAt(dw); return hi >= 0 ? { dw: dw, d: dw[hi], t: dayNm(hi) + '', t2: '' } : null;
+      return null;
     };
-    var V = k.map(function (x) { return val(x.n); }), bar, lg, R;
+    var V = VR.filter(function (r) { return r.x; }).map(function (r) { return val(r.x.n); }), bar, lg, R;
     if (an === 'wx') {
       var mx = 0; V.forEach(function (v) { if (v) mx = Math.max(mx, Math.abs(v.d), isFinite(v.md) ? Math.abs(v.md) : 0); });
       R = Math.min(40, Math.max(5, Math.ceil(mx / 5) * 5));
@@ -332,24 +397,17 @@
       R = Math.max(5, Math.ceil(ml / 5) * 5);
       bar = function (v) { return oneBar(v.d, R, v.md); };
       lg = '<span>ロスの計（売上に対する %）</span>' + (cmp ? '<span><i style="background:#e07a6e"></i>同じ型の店の中央より多い</span><span><i style="background:#5b8fd6"></i>少ない</span><span><i style="border-left:2px dashed #7c3aed;width:0"></i>同じ型の店の中央（その行）</span>' : '') + '<span>目盛りの端 ' + R + '%</span>';
-    } else if (an === 'md') {
+    } else {
       bar = function (v) { return mdBar(v.f); };
       lg = '<span>52週MD の回の結果（計画と比べた回の割合）</span><span><i style="background:#5b8fd6"></i>上回った</span><span><i style="background:#cbd5e1"></i>並み</span><span><i style="background:#e07a6e"></i>下回った</span>';
-    } else {
-      var mt = 0.1; V.forEach(function (v) { if (v) v.dw.forEach(function (y) { if (isFinite(y)) mt = Math.max(mt, Math.abs(y - 1)); }); });
-      bar = function (v) { return spark(v.dw, mt); };
-      lg = '<span>曜日の指数（' + esc(mname(S.m, k[0].n)) + '・左から月〜日と祝・横の線＝ふだん）</span><span><i style="background:#5b8fd6"></i>多い曜日</span><span><i style="background:#e07a6e"></i>少ない曜日</span>';
     }
-    var lastG = null, rows = '';
-    k.forEach(function (x, i) {
-      if (x.g && x.g !== lastG) { lastG = x.g; rows += '<div class="grp">' + esc(x.g) + '</div>'; }
-      var v = V[i], leaf = !hasKids(x.n), cl = !v ? '' : an === 'wx' ? cls(v.d) : an === 'ad' ? cls(v.d - 1) : an === 'ls' && isFinite(v.md) ? (v.d > v.md ? 'dn' : 'up') : '';
-      rows += '<button type="button" class="drow' + (leaf ? ' leaf' : '') + '" data-drill="' + esc(x.id) + '" title="押すと、' + esc(x.n.n) + 'の中が開きます"><span class="n"><span class="ar">' + (leaf ? '・' : '▶') + '</span><span>' + esc(x.n.n) + '</span></span>' +
-        '<span class="val">' + esc(v ? v.t2 : '') + '</span>' + (v ? bar(v) : '<span class="bar" aria-hidden="true"></span>') + '<span class="pct ' + cl + '">' + esc(v ? v.t : '―') + '</span></button>';
-    });
+    var vi = 0, rows = VR.map(function (r) {
+      if (!r.x) return rowExtra(r);
+      var v = V[vi++], cl = !v ? '' : an === 'wx' ? cls(v.d) : an === 'ad' ? cls(v.d - 1) : an === 'ls' && isFinite(v.md) ? (v.d > v.md ? 'dn' : 'up') : '';
+      return rowBtn(r, '<span class="val">' + esc(v ? v.t2 : '') + '</span>' + (v ? bar(v) : '<span class="bar" aria-hidden="true"></span>') + '<span class="pct ' + cl + '">' + esc(v ? v.t : '―') + '</span>');
+    }).join('');
     var sw = an === 'wx' ? '<div class="wlsw" role="group" aria-label="雨の強さ">' + WL.map(function (t, i) { return '<button type="button" data-wl="' + i + '" aria-pressed="' + (S.wl === i) + '">' + esc(t) + '</button>'; }).join('') + '</div>' : '';
-    return '<h2 class="sec" id="dig">掘り下げる — ' + esc(K) + 'ごとの' + esc(AN[an]) + '</h2>' + sw + '<div class="drill an"><div class="lg">' + lg + '</div>' + rows + '</div>' +
-      '<div class="hint">行を押すと、その中が開きます（同じ分析のまま）。「―」はその段に数が無い所（0 ではありません）。戻るときは、上の「1段上へ」か「← ひとつ前に戻る」。</div>';
+    return '<h2 class="sec" id="dig">掘り下げる — ' + esc(K) + 'ごとの' + esc(AN[an]) + '</h2>' + sw + '<div class="drill an"><div class="lg">' + lg + DC_LG + '</div>' + rows + '</div>' + DRILL_HINT;
   }
   function divBar(d, base, R, md) {   // 基準（0 か 1倍）を真ん中に、左右へ
     var pos = function (v) { return 50 + Math.max(-R, Math.min(R, v - base)) / R * 50; }, p = pos(d);
@@ -364,11 +422,6 @@
   function mdBar(f) {   // 上回った・並み・下回った の割合（左から）
     var t = f.n || 1, u = f.up / t * 100, fl = f.flat / t * 100, dn = f.down / t * 100;
     return '<span class="bar" aria-hidden="true"><i class="u" style="left:0;width:' + u + '%"></i><i style="left:' + u + '%;width:' + fl + '%;background:#cbd5e1"></i><i class="d" style="left:' + (u + fl) + '%;width:' + dn + '%"></i></span>';
-  }
-  function spark(dw, R) {   // 曜日の指数の小さな棒（月〜日・祝・行どうし同じ目盛り）
-    var W = 8, s = '';
-    dw.forEach(function (v, i) { if (!isFinite(v)) return; var h = Math.min(1, Math.abs(v - 1) / R) * 9; s += '<rect x="' + (i * (W + 3)) + '" y="' + (v >= 1 ? 10 - h : 10) + '" width="' + W + '" height="' + Math.max(0.8, h) + '" fill="' + (v >= 1 ? '#5b8fd6' : '#e07a6e') + '"/>'; });
-    return '<span class="bar spk" aria-hidden="true"><svg viewBox="0 0 ' + (dw.length * (W + 3)) + ' 20" preserveAspectRatio="none"><line x1="0" x2="' + (dw.length * (W + 3)) + '" y1="10" y2="10" stroke="#334155" stroke-width="1"/>' + s + '</svg></span>';
   }
   function details(n) {
     var h = '';
@@ -709,7 +762,7 @@
   function pickStore(code) {
     if (code === CUR) return;
     HIST.push(snap()); if (HIST.length > 200) HIST.shift();
-    useStore(code); S.view = 'status'; S.path = ['S'];
+    useStore(code); S.view = 'status'; S.path = ['S']; S.open = [];
     render({ top: true });
     ensureTree();   // 要約で先に描き、木は裏で受け取る（掘る・戻るは往復 0）
   }
@@ -811,16 +864,17 @@
       if (b.id === 'appsbtn') { $('#appsmenu').classList.toggle('on'); return; }
       if (b.id === 'logout') { AUTH.logout(); return; }
       if (ds.lens) { if (ds.lens === 'home') go({ view: 'home', path: ['S'] }, { top: true }); else go({ view: ds.lens }, { top: true }); return; }
-      if (ds.view === 'home-map') { HIST.push(snap()); useStore(''); S.view = 'home'; S.path = ['S']; render({ top: true }); return; }
+      if (ds.view === 'home-map') { HIST.push(snap()); useStore(''); S.view = 'home'; S.path = ['S']; S.open = []; render({ top: true }); return; }
       if (ds.view) { go({ view: ds.view }, { top: true }); return; }
       if (ds.store) { pickStore(ds.store); return; }
       if (ds.act === 'guide') { go({ view: 'guide' }, { top: true }); return; }
       if (ds.crumb != null) { go({ view: 'status', path: S.path.slice(0, +ds.crumb + 1) }, { land: true }); return; }
       if (ds.anhome) { go({ view: 'status', path: ['S'], an: ds.anhome }, { top: true }); return; }   // 天気と売れ方 → 自店のステータスをその分析で
-      if (ds.wxstore) { HIST.push(snap()); if (HIST.length > 200) HIST.shift(); useStore(ds.wxstore); S.view = 'status'; S.path = ['S']; S.an = 'wx'; render({ top: true }); ensureTree(); return; }   // 本部: 店ごとの雨の効き → その店を雨の日の効きで
+      if (ds.wxstore) { HIST.push(snap()); if (HIST.length > 200) HIST.shift(); useStore(ds.wxstore); S.view = 'status'; S.path = ['S']; S.open = []; S.an = 'wx'; render({ top: true }); ensureTree(); return; }   // 本部: 店ごとの雨の効き → その店を雨の日の効きで
       if (ds.an) { go({ an: ds.an }, { keep: true }); return; }
       if (ds.wl != null) { go({ wl: +ds.wl }, { keep: true }); return; }
       if (ds.m) { go({ m: ds.m }, { keep: true }); return; }
+      if (ds.tog) { toggleOpen(ds.tog); return; }   // 掘り下げの行: その場で開く・閉じる
       if (ds.drill) { drillTo(ds.drill); return; }
     });
     document.addEventListener('keydown', function (e) {
