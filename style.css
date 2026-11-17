@@ -6,7 +6,7 @@ button{font:inherit;color:inherit}
 a{color:var(--brand)}
 .sr{position:absolute;left:-9999px}
 /* 上の帯（題・型の選び・探す・利用ガイド・アカウント） */
-#hdr{position:sticky;top:0;z-index:40;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;padding:0 16px;min-height:var(--hdr)}
+#hdr{position:sticky;top:0;z-index:40;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;padding:0 16px;min-height:56px}
 #hdr .ttl{font-weight:800;font-size:17px;color:var(--brand);white-space:nowrap}
 #hdr .ttl small{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;color:#7c2d12;background:#ffedd5;border-radius:999px;padding:0 7px;vertical-align:2px}
 #lens{display:flex;gap:4px;flex:0 1 auto;overflow-x:auto;scrollbar-width:none}
@@ -106,14 +106,15 @@ h3.sub{font-size:15px;margin:12px 0 6px;color:#0b3a7e;border-left:5px solid var(
 .drill{background:#fff;border:1px solid var(--line);border-radius:12px;padding:6px 10px}
 .drill .lg{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);padding:2px 2px 6px;border-bottom:1px solid #eef2f7}
 .drill .lg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
-.drow{display:grid;grid-template-columns:minmax(8em,15em) 7.5em minmax(160px,1fr) 5.6em;align-items:center;gap:10px;width:100%;border:0;border-bottom:1px solid #eef2f7;background:none;padding:7px 4px;min-height:44px;cursor:pointer;text-align:left}
+.drow{display:grid;grid-template-columns:minmax(8em,15em) 5.6em minmax(160px,1fr) minmax(7em,11.5em);align-items:center;gap:10px;width:100%;border:0;border-bottom:1px solid #eef2f7;background:none;padding:7px 4px;min-height:44px;cursor:pointer;text-align:left}
 .drow:last-child{border-bottom:0}
 .drow:hover{background:#f6f9fd}
 .drow.leaf{cursor:default}
 .drow .n{font-weight:700;display:flex;gap:6px;align-items:center;min-width:0}
 .drow .n span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .drow .n .ar{color:var(--brand);font-size:12px;flex:0 0 auto}
-.drow .val{text-align:right;font-variant-numeric:tabular-nums;font-size:14.5px}
+/* 行の並び（PO 11/17）: 名前 → 主の数 → 棒 が一つのかたまり。.val は比べる用の添え（かっこ付き・右の端・薄く） */
+.drow .val{min-width:0;text-align:left;font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .drow .pct{text-align:right;font-weight:800;font-variant-numeric:tabular-nums;font-size:14.5px}
 .bar{position:relative;height:18px}
 .bar .zl{position:absolute;left:50%;top:-6px;bottom:-6px;width:2px;background:#334155}
@@ -231,7 +232,9 @@ table.t tr.me td{background:#fff8e1}
  #upbtn{display:none}
  .tiles,.tiles.t4{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
  .tile .v{font-size:20px}
- .drow{grid-template-columns:minmax(0,1fr) 5.2em 4.8em;grid-template-areas:"n v p" "b b b";gap:2px 8px}
+ .drow{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"n p" "b b" "v v";gap:2px 8px}
+ .drow .val{text-align:right;white-space:normal;font-size:11.5px;line-height:1.25}
+ .drow .val:empty{display:none}
  .drow .n{grid-area:n}.drow .val{grid-area:v}.drow .pct{grid-area:p}.drow .bar{grid-area:b}
  .grid2,.wx,.guide{grid-template-columns:1fr}
  .guide nav{position:static}
@@ -277,7 +280,6 @@ details.det .lz p{margin:.4rem 0;line-height:1.6}
 .wlsw{display:flex;gap:6px;margin:0 0 6px;flex-wrap:wrap}
 .wlsw button{min-height:36px;padding:0 12px;border:1px solid var(--line);border-radius:18px;background:#fff;font-weight:700;font-size:14px;cursor:pointer}
 .wlsw button[aria-pressed="true"]{background:var(--brand);color:#fff;border-color:var(--brand)}
-.drill.an .drow .val{font-size:12.5px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bar.spk svg{position:absolute;left:0;top:-1px;width:100%;height:20px}
 @media (max-width:1100px){.tiles.an6{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:760px){.tiles.an6{grid-template-columns:repeat(2,minmax(0,1fr))}#ancards small{display:block;margin:2px 0 0}}
@@ -362,4 +364,25 @@ h3.mh small{font-size:12.5px;font-weight:400;color:var(--sub)}
 .drill .drow .bar.tmb{background:none;display:flex;align-items:center;overflow:hidden}
 .drill .drow .bar.tmb svg{display:block}
 
-:root{--css-build:"status-web-2026-11-16f"}
+/* 11/17 天気と売れ方の店ごとの違い（分析レポート 3-2 と同じ数）: 確かさの段＝塗り（95% 以上）・枠だけ（70〜95%）・点線の枠（70% 未満） */
+.bar i.u.t1{background:#e3ecf8;border:2px solid #5b8fd6}.bar i.d.t1{background:#fbe7e4;border:2px solid #e07a6e}
+.bar i.u.t2{background:transparent;border:2px dashed #a9c2e8}.bar i.d.t2{background:transparent;border:2px dashed #eeb3ab}
+.drill .lg i.lgt{width:16px;background:#e07a6e}.drill .lg i.lgt.t1{background:#fbe7e4;border:2px solid #e07a6e;box-sizing:border-box}.drill .lg i.lgt.t2{background:transparent;border:2px dashed #eeb3ab;box-sizing:border-box}
+.w32sw{display:flex;gap:6px 10px;flex-wrap:wrap;align-items:center;margin:0 0 8px}.w32sw .wlsw{margin:0 8px 0 0}.w32sw .lb{font-size:12.5px;font-weight:700;color:var(--sub)}
+.drill .drow .n small{font-weight:600;color:var(--sub);font-size:12px;flex:0 0 auto}
+
+/* 11/17 年間の流れ: 催事1つ＝1行の帯（12か月・点線＝準備・塗り＝当日・今月の列に色）と、押した行のすぐ下に開く中身 */
+.drill.yr .drow.yrow .bar.yr12{background:linear-gradient(90deg,transparent var(--now),#dbe8fb var(--now),#dbe8fb calc(var(--now) + 8.333%),transparent calc(var(--now) + 8.333%)),repeating-linear-gradient(90deg,transparent 0 calc(8.333% - 1px),#e6ebf2 calc(8.333% - 1px) 8.333%)}
+.bar.yr12 i.pr{top:7px;height:4px;border-radius:2px;background:repeating-linear-gradient(90deg,#b45309 0 6px,transparent 6px 10px)}.bar.yr12 i.ed{top:1px;height:16px;background:#1f4f8f}
+.drow .n small.ytag{flex:0 0 auto;font-size:11px;font-weight:800;color:#b45309;background:#fff3e0;border-radius:999px;padding:0 6px}.drow .n small.ytag.on{color:#fff;background:#1f4f8f}
+.drill .lg i.lgpr{width:18px;height:4px;vertical-align:3px;background:repeating-linear-gradient(90deg,#b45309 0 6px,transparent 6px 10px)}.drow.yrow .pct{color:#0b3a7e;font-weight:800}
+.drill.yr .drow.yrow .val{white-space:normal;line-height:1.3}   /* 年間の流れの（日付・準備の始まり）は長い催事があるので2行まで折り返す（11/17 の確かめで、敬老の日など3行が「…」で切れていた） */
+.drow.ruler.yrr b,.drow.ruler.yrr b:first-child,.drow.ruler.yrr b:last-child{transform:translateX(-50%)}
+.yopen{padding:8px 12px 10px calc(2.2em + 10px);border-bottom:1px solid #eef2f7;background:#fbfcfe;box-shadow:inset 4px 0 0 var(--brand)}.yopen .ynote{margin:0 0 8px;font-size:14px}
+.yopen .ycards,.yopen .ydepts{margin:0 0 6px}.yopen .ycards>b,.yopen .ydepts>b{display:block;font-size:12.5px;color:var(--sub);margin:0 0 4px}
+.yopen .kc1{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;width:100%;text-align:left;border:1px solid var(--line);border-radius:8px;background:#fff;padding:6px 10px;margin:0 0 4px;cursor:pointer;font-size:14px;font-weight:700;color:var(--ink)}.yopen .kc1 small{font-weight:400;color:var(--sub);font-size:12.5px}.yopen .kc1:hover{border-color:var(--brand)}
+.yopen .yd{display:grid;grid-template-columns:7.5em minmax(0,1fr);gap:2px 10px;padding:5px 8px;margin:0 0 3px;border-radius:6px;background:var(--dbg,#f3f6fa);box-shadow:inset 4px 0 0 var(--dac,#cbd5e1);font-size:13.5px}
+.yopen .ydn{font-weight:800}.yopen .ydn small{display:block;font-weight:400;color:var(--sub);font-size:12px}.yopen .yds small{display:block;color:var(--sub);font-size:12.5px;margin-top:2px}
+@media (max-width:760px){.yopen{padding-left:12px}.yopen .yd{grid-template-columns:1fr}}
+
+:root{--css-build:"status-web-2026-11-17c"}

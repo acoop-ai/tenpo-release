@@ -54,9 +54,9 @@
   // ── 見方と戻る（場所の移動と見方の変化を、同じ履歴に積む）
   // an＝見る分析（2026-11-15 PO: 店の最初の画面は2つの分析の中身から。札で選び、部門 → 中分類 → クラスへ同じ分析のまま掘る）。wl＝雨の強さ（0＝雨 10mm〜・1＝強い雨 30mm〜）
   // open＝掘り下げで、その場で開いた行（PO 11/16「部門を選ぶと別画面に飛ばされて、今どこにいるかわからなくなる」→ 押した行のすぐ下に中を開く）。段（path）が替われば閉じる
-  var S = { view: 'home', path: ['S'], m: 'a', an: 'yo', wl: 0, open: [], mdp: (function () { try { return localStorage.getItem('storeops_mdp_v1') || ''; } catch (e) { return ''; } })() };   // mdp＝本部の地図の見る範囲（部門のコード・空＝全社）。この端末に覚える
+  var S = { view: 'home', path: ['S'], m: 'a', an: 'yo', wl: 0, open: [], wo: [], wm: 0, mo: [], yo: [], mdp: (function () { try { return localStorage.getItem('storeops_mdp_v1') || ''; } catch (e) { return ''; } })() };   // mdp＝本部の地図の見る範囲（部門のコード・空＝全社）。この端末に覚える
   var HIST = [];
-  function snap() { return JSON.stringify({ view: S.view, path: S.path, m: S.m, an: S.an, wl: S.wl, open: S.open, mdp: S.mdp, c: CUR, y: window.scrollY }); }
+  function snap() { return JSON.stringify({ view: S.view, path: S.path, m: S.m, an: S.an, wl: S.wl, open: S.open, wo: S.wo, wm: S.wm, mo: S.mo, yo: S.yo, mdp: S.mdp, c: CUR, y: window.scrollY }); }
   function go(ch, how) { HIST.push(snap()); if (HIST.length > 200) HIST.shift(); for (var k in ch) S[k] = ch[k]; if ('path' in ch && !('open' in ch)) S.open = []; render(how || {}); }
   function back() { if (!HIST.length) return; var o = JSON.parse(HIST.pop()), y = o.y, c = o.c; delete o.y; delete o.c; for (var k in o) S[k] = o[k]; if (!o.open) S.open = []; if (c !== CUR) useStore(c); render({ y: y, msg: '← 元の見方に戻りました' }); }
   // 部門の色（行の地の淡い色＋左の帯）。🔴 正は作業フォルダの `_共通\部門の色\dept_colors.json`（ヒッスルの部門の名前とも対）。ここは写し・手で直さない（試験が正と照らす）
@@ -154,15 +154,15 @@
   var MAP_HRS = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
   function mapNum(v) { return v === null || v === undefined ? NaN : v; }
   function median(a) { var b = a.filter(isFinite).slice().sort(function (p, q) { return p - q; }); if (!b.length) return NaN; var h = b.length >> 1; return b.length % 2 ? b[h] : (b[h - 1] + b[h]) / 2; }
-  /** 1つの店（か店の部門）の、選んだ分析の値。d＝並べる値・t＝右の字・t2＝左の小さな字 */
+  /** 1つの店（か店の部門）の、選んだ分析の値。d＝並べる値・t＝主の数（名前のすぐ右）・t2＝比べる用の添え（棒の右・かっこ付き） */
   function mapLens(x, an, m) {
     if (!x) return null;
     var ov = x.ov || {};
     if (an === 'yo') { var mm = x.m && x.m[m], yy = mm ? mapNum(mm.yo) : NaN; return isFinite(yy) && yy > 0 ? { d: pct(yy), t: sg(pct(yy)) + '%', t2: num(mapNum(mm.d), m === 'a' ? 1 : 0) + MK[m].u } : null; }
     if (an === 'wx') { var w = ov.wx && ov.wx[m === 'q' ? 'a' : m], v = w ? mapNum(w[S.wl]) : NaN, o = w ? mapNum(w[1 - S.wl]) : NaN; return isFinite(v) ? { d: v, t: sg(v) + '%', t2: isFinite(o) ? (S.wl ? '雨 ' : '強い雨 ') + sg(o) + '%' : '' } : null; }
-    if (an === 'ad') { var a = ov.ad; return a && isFinite(mapNum(a.L)) ? { d: a.L, t: num(a.L, 2) + '倍', t2: num(a.nc) + '件' } : null; }
+    if (an === 'ad') { var a = ov.ad; return a && isFinite(mapNum(a.L)) ? { d: a.L, t: num(a.L, 2) + '倍', t2: '比べた ' + num(a.nc) + '件' } : null; }
     if (an === 'ls') { var l = mapNum(x.ls); return isFinite(l) ? { d: l, t: num(l, 1) + '%', t2: '' } : null; }
-    if (an === 'md') { var f = ov.md; return f && f.n ? { d: f.down / f.n * 100, f: f, t: f.down + '/' + f.n + '回', t2: '上回り ' + f.up } : null; }
+    if (an === 'md') { var f = ov.md; return f && f.n ? { d: f.down / f.n * 100, f: f, t: f.down + '/' + f.n + '回', t2: '上回った ' + f.up + '回' } : null; }
     if (an === 'tm') {
       var dw = ov.dw && (ov.dw[m] || ov.dw.a), hp = ov.hp; if (!dw) return null;
       var hi = maxAt(dw), lo = minAt(dw), ph = maxAt(hp || []);
@@ -335,32 +335,45 @@
       lg = '<span>ロスの計（売上に対する %）</span><span><i style="background:#e07a6e"></i>全社より多い</span><span><i style="background:#5b8fd6"></i>少ない</span>';
     } else if (an === 'md') {
       bar = function (v) { return mdBar(v.f); }; tk = [[0, '0%'], [50, '50%'], [100, '100%（回の数）']];
-      lg = '<span>52週MD の回の結果（計画と比べた回の割合）</span><span><i style="background:#5b8fd6"></i>上回った</span><span><i style="background:#cbd5e1"></i>並み</span><span><i style="background:#e07a6e"></i>下回った</span>';
+      lg = '<span>52週MD の回の結果（計画と比べた回の割合）・数＝下回った回／全部の回</span><span><i style="background:#5b8fd6"></i>上回った</span><span><i style="background:#cbd5e1"></i>並み</span><span><i style="background:#e07a6e"></i>下回った</span>';
     } else {
       var mt = 0.1; ok.concat(areaV.filter(function (o) { return o.v; }).map(function (o) { return { v: o.v }; })).forEach(function (r) { r.v.dw.forEach(function (y) { if (isFinite(y)) mt = Math.max(mt, Math.abs(y - 1)); }); });
       mt = Math.min(mt, 0.5);
       bar = function (v) { return '<span class="bar tmb" aria-hidden="true">' + dwProf(v.dw, mt) + '</span>'; }; tk = null;
       lg = '<span>曜日の形（月→日・ふだん＝1.00 の線から上下・棒の端 ±' + Math.round(mt * 100) + '%）</span><span><i style="background:#5b8fd6"></i>ふだんより多い</span><span><i style="background:#e07a6e"></i>少ない</span><span><i style="background:rgba(234,138,40,.25)"></i>土日</span>';
     }
-    lg = '<div class="lg"><span>' + esc(nm0) + '</span>' + lg + (co && an !== 'md' && an !== 'tm' ? '<span><i style="border-left:2px dashed #7c3aed;width:0"></i>全社' + (an === 'yo' || an === 'ls' ? '' : '（店の中央）') + ' ' + esc(co.t) + '</span>' : '') + (R ? '<span>目盛りの端 ' + (an === 'ls' ? R + '%' : an === 'ad' ? num(1 + R, 1) + '倍' : '±' + R + '%') + '</span>' : '') + '</div>';
-    var rowHtml = function (name, sub, v, attrs, cls2) {
-      return '<' + (attrs ? 'button type="button"' : 'div') + ' class="drow mrow' + (attrs ? '' : ' leaf') + (cls2 || '') + '"' + (attrs || '') + '><span class="n"><span class="ar">' + (attrs ? '▸' : '') + '</span><span>' + name + '</span></span>' +
-        '<span class="val">' + esc(v ? (an === 'tm' ? v.t2 : v.t2 || '') : '') + '</span>' + (v ? bar(v) : '<span class="bar" aria-hidden="true"></span>') +
-        '<span class="pct ' + (v && an !== 'tm' ? cl(v) : '') + '">' + esc(v ? (an === 'tm' ? (v.hi >= 0 ? v.t + 'が多い' : '―') : v.t) : '―') + '</span></' + (attrs ? 'button' : 'div') + '>';
+    lg = '<div class="lg"><span>' + esc(nm0) + '</span>' + lg + (co && an !== 'md' && an !== 'tm' ? '<span><i style="border-left:2px dashed #7c3aed;width:0"></i>全社' + (an === 'yo' || an === 'ls' ? '' : '（店の中央）') + ' ' + esc(co.t) + '</span>' : '') + (R ? '<span>目盛りの端 ' + (an === 'ls' ? R + '%' : an === 'ad' ? num(1 + R, 1) + '倍' : '±' + R + '%') + '</span>' : '') +
+      asideLg({ yo: mn(m) + (m === 'u' ? '' : '（1日あたり）'), wx: '比べる用・' + WL[1 - S.wl] + 'の日の値', ad: '比べた特売の件数', md: '上回った回の数', tm: '客がいちばん多い時刻' }[an]) + '</div>';
+    // 行の並び（PO 11/17）: 名前 → 主の数 → 棒 が一つのかたまり。比べる用の添えは右の端に、かっこ付きで
+    var cells = function (v) {
+      return '<span class="pct ' + (v && an !== 'tm' ? cl(v) : '') + '">' + esc(v ? (an === 'tm' ? (v.hi >= 0 ? v.t + 'が多い' : '―') : v.t) : '―') + '</span>' +
+        (v ? bar(v) : '<span class="bar" aria-hidden="true"></span>') + '<span class="val">' + esc(v ? aside(v.t2) : '') + '</span>';
+    };
+    var rowHtml = function (name, sub, v, attrs, cls2, ar) {
+      return '<' + (attrs ? 'button type="button"' : 'div') + ' class="drow mrow' + (attrs ? '' : ' leaf') + (cls2 || '') + '"' + (attrs || '') + '><span class="n"><span class="ar">' + (attrs ? ar || '▸' : '') + '</span><span>' + name + '</span></span>' + cells(v) + '</' + (attrs ? 'button' : 'div') + '>';
+    };
+    // 店の行のすぐ下に開く、その店の部門（PO 11/17「この画面で直ぐにできないと不便」・地図の数＝往復 0）。もっと下（中分類 → クラス）は「大きく開く」で
+    var kidsOf = function (s) {
+      return mapDl(M).filter(function (x) { return !x.alt; }).map(function (x) {
+        var c = deptCol(x.n), v = s.dp && s.dp[x.id] ? mapLens(s.dp[x.id], an, m) : null;
+        return '<div class="drow mrow leaf sub' + (c ? ' dc' : '') + (v ? '' : ' nodp') + '" style="' + (c ? '--dbg:' + c[0] + ';--dac:' + c[1] + ';' : '') + '--dep:1"><span class="n"><span class="ar">・</span><span>' + esc(x.n) + '</span></span>' + cells(v) + '</div>';
+      }).join('') + '<div class="dopen" style="--dep:1"><button type="button" data-store="' + esc(s.c) + '">' + esc(s.nm) + 'を大きく開く（中分類 → クラス・AI のコメント）▸</button></div>';
     };
     var a1 = '<h3 class="mh">エリアの比較 — ' + esc(nm0) + (an === 'yo' || an === 'ls' ? '（エリアの店を合わせた計）' : '（エリアの店の中央）') + '</h3><div class="drill an">' + lg + (tk ? ruler(tk.filter(function (x) { return x[1]; })) : '') +
       areaV.map(function (o) { return rowHtml(esc(o.a.nm) + ' <small>' + o.a.stores.length + '店</small>', '', o.v, '', ' area'); }).join('') + '</div>';
-    var a2 = '<h3 class="mh">店の比較（エリアごと・' + (worstFirst < 0 ? '高い順' : worstFirst > 0 ? '低い順' : 'いつもの店の並び') + '）<small>行を押すと、その店の' + esc(dn || '') + (dn ? 'の' : '') + esc(AN[an]) + 'が開きます</small></h3><div class="drill an">' + lg + (tk ? ruler(tk.filter(function (x) { return x[1]; })) : '');
+    var a2 = '<h3 class="mh">店の比較（エリアごと・' + (worstFirst < 0 ? '高い順' : worstFirst > 0 ? '低い順' : 'いつもの店の並び') + '）<small>' + (dn ? '行を押すと、その店の' + esc(dn) + 'の' + esc(AN[an]) + 'が開きます' : '行を押すと、すぐ下にその店の部門が開きます') + '</small></h3><div class="drill an">' + lg + (tk ? ruler(tk.filter(function (x) { return x[1]; })) : '');
     M.areas.forEach(function (a) {
       a2 += '<div class="grp">' + esc(a.nm) + '</div>';
       // ほかの店と比べない店（nc）は、並べ替えに入れず、エリアの最後に置く（PO 11/14: AI のコメントの「いちばん下がった・伸びた」に入れないのと同じ）
       var rs = rows.filter(function (r) { return a.stores.indexOf(r.s) >= 0; }).sort(function (p, q) { if (!p.s.nc !== !q.s.nc) return p.s.nc ? 1 : -1; if (!p.v) return 1; if (!q.v) return -1; return worstFirst ? (p.v.d - q.v.d) * worstFirst : 0; });
       rs.forEach(function (r) {
-        var sd = d && r.x ? r.x.same || d : '';
-        a2 += rowHtml(esc(r.s.nm) + (r.s.nc ? ' <small class="nctag">比べない</small>' : '') + (r.x && r.x.same ? ' <small>（' + esc((mapDl(M).filter(function (z) { return z.id === r.x.same; })[0] || {}).n || '') + 'と同じ）</small>' : ''), '', r.v, ' data-store="' + esc(r.s.c) + '"' + (sd ? ' data-sdep="' + esc(sd) + '"' : '') + ' title="押すと、' + esc(r.s.nm) + (dn ? 'の' + dn : '') + 'の' + esc(AN[an]) + 'が開きます"', r.v ? '' : ' nodp');
+        var sd = d && r.x ? r.x.same || d : '', op = !d && (S.mo || []).indexOf(String(r.s.c)) >= 0;
+        var nm = esc(r.s.nm) + (r.s.nc ? ' <small class="nctag">比べない</small>' : '') + (r.x && r.x.same ? ' <small>（' + esc((mapDl(M).filter(function (z) { return z.id === r.x.same; })[0] || {}).n || '') + 'と同じ）</small>' : '');
+        if (d) a2 += rowHtml(nm, '', r.v, ' data-store="' + esc(r.s.c) + '"' + (sd ? ' data-sdep="' + esc(sd) + '"' : '') + ' title="押すと、' + esc(r.s.nm) + 'の' + esc(dn) + 'の' + esc(AN[an]) + 'が開きます"', r.v ? '' : ' nodp');
+        else a2 += rowHtml(nm, '', r.v, ' data-mtog="' + esc(r.s.c) + '" aria-expanded="' + op + '" title="押すと、すぐ下に' + esc(r.s.nm) + 'の部門が開きます（もう一度押すと閉じる）"', (r.v ? '' : ' nodp') + (op ? ' open' : ''), op ? '▼' : '▶') + (op ? kidsOf(r.s) : '');
       });
     });
-    a2 += '</div><div class="hint">店の行を押すと、その店の' + (dn ? esc(dn) + '（中分類 → クラス）' : 'ステータス（部門 → 中分類 → クラス）') + 'が、この分析のまま開きます。「―」はその店に数が無い所（0 ではありません）。' + (stores.some(function (s) { return s.nc; }) ? '「比べない」の店は、並べる順に入れず、エリアの最後に置いています（エリアの値と全社の線にも入れていません）。' : '') + '</div>';
+    a2 += '</div><div class="hint">' + (dn ? '店の行を押すと、その店の' + esc(dn) + '（中分類 → クラス）が、この分析のまま開きます。' : '店の行を押すと、すぐ下にその店の部門が、この分析のまま開きます（もう一度押すと閉じる）。中分類 → クラスは「〇〇店を大きく開く」で。') + '「―」はその店に数が無い所（0 ではありません）。' + (stores.some(function (s) { return s.nc; }) ? '「比べない」の店は、並べる順に入れず、エリアの最後に置いています（エリアの値と全社の線にも入れていません）。' : '') + '</div>';
     return { top: sw + a1, low: head + a2 };
   }
   function storeName(code) { return (ME.names && ME.names[code]) || (DATA[code] && (DATA[code].sum || DATA[code].tree) ? (DATA[code].sum || DATA[code].tree).meta.st.nm : '店 ' + code); }
@@ -379,8 +392,11 @@
   }
   /** 掘り下げの棒の物差し（棒の列にそろえる・PO 11/16「スケールが分かりづらい」）。ticks: [[位置 0〜100, 字], …] */
   function ruler(ticks) {
-    return '<div class="drow leaf ruler" aria-hidden="true"><span class="n"><small>目盛り</small></span><span class="val"></span><span class="bar">' + ticks.map(function (t) { return '<b style="left:' + t[0] + '%">' + esc(t[1]) + '</b>'; }).join('') + '</span><span class="pct"></span></div>';
+    return '<div class="drow leaf ruler" aria-hidden="true"><span class="n"><small>目盛り</small></span><span class="pct"></span><span class="bar">' + ticks.map(function (t) { return '<b style="left:' + t[0] + '%">' + esc(t[1]) + '</b>'; }).join('') + '</span><span class="val"></span></div>';
   }
+  /** 比べる用の添え（PO 11/17「選んでいない方は比べるための表示と分かるように」）: かっこを付けて、棒の右の端に薄く */
+  function aside(t) { return t ? '（' + t + '）' : ''; }
+  function asideLg(t) { return t ? '<span class="lgx">（ ）＝' + esc(t) + '</span>' : ''; }
   function pctTick(v) { return (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(Math.round(v * 10) / 10) + '%'; }
   function divTicks(R, base, fmt) { return [[0, fmt(base - R)], [25, fmt(base - R / 2)], [50, fmt(base)], [75, fmt(base + R / 2)], [100, fmt(base + R)]]; }
   /** 見る範囲（部門）の札（PO 11/16「冒頭の分析の時点で、部門ごとに切り替えができたほうが良い」）。押すと、分析の札・AI のコメント・掘り下げ・この段の図が、その部門に替わる */
@@ -529,9 +545,10 @@
       if (!r.x) return rowExtra(r);
       var x = r.x, d = myo(x.n, m), p = pos(d), b = !isFinite(d) ? '' : d >= 0 ? '<i class="u" style="left:50%;width:' + (p - 50) + '%"></i>' : '<i class="d" style="left:' + p + '%;width:' + (50 - p) + '%"></i>';
       var cut = Math.abs(d) > R ? '<span class="cut ' + cls(d) + '" style="' + (d > 0 ? 'right:0' : 'left:0') + '">' + (d > 0 ? '›' : '‹') + '</span>' : '';
-      return rowBtn(r, '<span class="val">' + num(mval(x.n, m), m === 'a' ? 1 : 0) + '</span><span class="bar" aria-hidden="true"><span class="zl"></span>' + (isFinite(pd) ? '<span class="pl" style="left:' + pos(pd) + '%"></span>' : '') + b + cut + '</span><span class="pct ' + cls(d) + '">' + sg(d) + '%</span>');
+      var mv = mval(x.n, m);
+      return rowBtn(r, '<span class="pct ' + cls(d) + '">' + sg(d) + '%</span><span class="bar" aria-hidden="true"><span class="zl"></span>' + (isFinite(pd) ? '<span class="pl" style="left:' + pos(pd) + '%"></span>' : '') + b + cut + '</span><span class="val">' + esc(aside(isFinite(mv) ? num(mv, m === 'a' ? 1 : 0) + MK[m].u : '')) + '</span>');
     }).join('');
-    return '<h2 class="sec" id="dig">掘り下げる — ' + esc(KIDNM[n.lv] || 'クラス') + 'ごとの' + esc(mname(m, k[0].n)) + 'の前年比</h2><div class="drill"><div class="lg"><span>' + esc(mname(m, k[0].n)) + '（' + esc(MK[m].u) + '）と、前年からの増減</span><span><i style="background:#5b8fd6"></i>前年より多い</span><span><i style="background:#e07a6e"></i>少ない</span><span><i style="border-left:2px dashed #7c3aed;width:0"></i>' + esc(n.n) + '全体（' + sg(pd) + '%）</span><span>目盛りの端 ±' + R + '%</span>' + DC_LG + '</div>' + ruler(divTicks(R, 0, pctTick)) + rows + '</div>' + DRILL_HINT;
+    return '<h2 class="sec" id="dig">掘り下げる — ' + esc(KIDNM[n.lv] || 'クラス') + 'ごとの' + esc(mname(m, k[0].n)) + 'の前年比</h2><div class="drill"><div class="lg"><span>' + esc(mname(m, k[0].n)) + 'の前年からの増減</span><span><i style="background:#5b8fd6"></i>前年より多い</span><span><i style="background:#e07a6e"></i>少ない</span><span><i style="border-left:2px dashed #7c3aed;width:0"></i>' + esc(n.n) + '全体（' + sg(pd) + '%）</span><span>目盛りの端 ±' + R + '%</span>' + asideLg(mname(m, k[0].n) + (m === 'u' ? '' : '（1日あたり）')) + DC_LG + '</div>' + ruler(divTicks(R, 0, pctTick)) + rows + '</div>' + DRILL_HINT;
   }
   // ── 掘り下げの行（PO 11/16）: 押すと、その行のすぐ下に中が開く（もう一度押すと閉じる）。別の画面へは「〇〇だけを大きく開く」で。部門ごとに淡い地の色
   var DC_LG = '<span><i class="dcsw" aria-hidden="true"></i>行の地の色・左の帯＝部門の印（増え減りの色ではありません）</span>';
@@ -610,9 +627,9 @@
     var k = kids(n), an = S.an, K = KIDNM[n.lv] || 'クラス', cmp = !nc(), VR = visRows(n);
     var val = function (x) {
       if (an === 'wx') { var w = wxv(x, S.wl), o = wxv(x, 1 - S.wl); return w ? { d: w[0], md: cmp ? (isFinite(w[1]) ? w[1] : w[2]) : NaN, t: sg(w[0]) + '%', t2: o ? (S.wl ? '雨 ' : '強い雨 ') + sg(o[0]) + '%' : '' } : null; }
-      if (an === 'ad') { var a = x.ad; return a && isFinite(a.L) ? { d: a.L, t: num(a.L, 2) + '倍', t2: num(a.nc) + '件' } : null; }
-      if (an === 'ls') { var l = x.ls; return l ? { d: l[2], md: cmp && x.lp ? x.lp[0] : NaN, t: num(l[2], 1) + '%', t2: '見切り ' + num(l[0], 1) + '・廃棄 ' + num(l[1], 1) } : null; }
-      if (an === 'md') { var f = x.m5; return f && f.n ? { d: f.down / f.n * 100, f: f, t: f.down + '/' + f.n + '回', t2: '上回り ' + f.up } : null; }
+      if (an === 'ad') { var a = x.ad; return a && isFinite(a.L) ? { d: a.L, t: num(a.L, 2) + '倍', t2: '比べた ' + num(a.nc) + '件' } : null; }
+      if (an === 'ls') { var l = x.ls; return l ? { d: l[2], md: cmp && x.lp ? x.lp[0] : NaN, t: num(l[2], 1) + '%', t2: '見切り ' + num(l[0], 1) + '%・廃棄 ' + num(l[1], 1) + '%' } : null; }
+      if (an === 'md') { var f = x.m5; return f && f.n ? { d: f.down / f.n * 100, f: f, t: f.down + '/' + f.n + '回', t2: '上回った ' + f.up + '回' } : null; }
       return null;
     };
     var V = VR.filter(function (r) { return r.x; }).map(function (r) { return val(r.x.n); }), bar, lg, R, tk = null;
@@ -620,25 +637,25 @@
       var mx = 0; V.forEach(function (v) { if (v) mx = Math.max(mx, Math.abs(v.d), isFinite(v.md) ? Math.abs(v.md) : 0); });
       R = Math.min(40, Math.max(5, Math.ceil(mx / 5) * 5));
       bar = function (v) { return divBar(v.d, 0, R, v.md); }; tk = divTicks(R, 0, pctTick);
-      lg = '<span>' + esc(WL[S.wl]) + 'の日の' + esc(mname(S.m, k[0].n)) + '（ふだんの同じ曜日との差）</span><span><i style="background:#5b8fd6"></i>多い</span><span><i style="background:#e07a6e"></i>少ない</span>' + (cmp ? '<span><i style="border-left:2px dashed #7c3aed;width:0"></i>同じ型の店の中央（その行）</span>' : '') + '<span>目盛りの端 ±' + R + '%</span>';
+      lg = '<span>' + esc(WL[S.wl]) + 'の日の' + esc(mname(S.m, k[0].n)) + '（ふだんの同じ曜日との差）</span><span><i style="background:#5b8fd6"></i>多い</span><span><i style="background:#e07a6e"></i>少ない</span>' + (cmp ? '<span><i style="border-left:2px dashed #7c3aed;width:0"></i>同じ型の店の中央（その行）</span>' : '') + '<span>目盛りの端 ±' + R + '%</span>' + asideLg('比べる用・' + WL[1 - S.wl] + 'の日の値');
     } else if (an === 'ad') {
       var ma = 0; V.forEach(function (v) { if (v) ma = Math.max(ma, Math.abs(v.d - 1)); });
       R = Math.min(5, Math.max(1, Math.ceil(ma * 2) / 2));
       bar = function (v) { return divBar(v.d, 1, R, NaN); }; tk = divTicks(R, 1, function (x) { return x < 0 ? '' : (Math.round(x * 10) / 10) + '倍'; });
-      lg = '<span>特売の日の販売数 ÷ ふだん（倍・真ん中の線＝1倍）</span><span><i style="background:#5b8fd6"></i>ふだんより売れた</span><span><i style="background:#e07a6e"></i>ふだんより少ない</span><span>目盛りの端 ' + num(1 + R, 1) + '倍</span>';
+      lg = '<span>特売の日の販売数 ÷ ふだん（倍・真ん中の線＝1倍）</span><span><i style="background:#5b8fd6"></i>ふだんより売れた</span><span><i style="background:#e07a6e"></i>ふだんより少ない</span><span>目盛りの端 ' + num(1 + R, 1) + '倍</span>' + asideLg('比べた特売の件数');
     } else if (an === 'ls') {
       var ml = 0; V.forEach(function (v) { if (v) ml = Math.max(ml, v.d, isFinite(v.md) ? v.md : 0); });
       R = Math.max(5, Math.ceil(ml / 5) * 5);
       bar = function (v) { return oneBar(v.d, R, v.md); }; tk = [[0, '0%'], [50, (R / 2) + '%'], [100, R + '%']];
-      lg = '<span>ロスの計（売上に対する %）</span>' + (cmp ? '<span><i style="background:#e07a6e"></i>同じ型の店の中央より多い</span><span><i style="background:#5b8fd6"></i>少ない</span><span><i style="border-left:2px dashed #7c3aed;width:0"></i>同じ型の店の中央（その行）</span>' : '') + '<span>目盛りの端 ' + R + '%</span>';
+      lg = '<span>ロスの計（売上に対する %）</span>' + (cmp ? '<span><i style="background:#e07a6e"></i>同じ型の店の中央より多い</span><span><i style="background:#5b8fd6"></i>少ない</span><span><i style="border-left:2px dashed #7c3aed;width:0"></i>同じ型の店の中央（その行）</span>' : '') + '<span>目盛りの端 ' + R + '%</span>' + asideLg('ロスの内訳（売上に対する %）');
     } else {
       bar = function (v) { return mdBar(v.f); }; tk = [[0, '0%'], [50, '50%'], [100, '100%（回の数）']];
-      lg = '<span>52週MD の回の結果（計画と比べた回の割合）</span><span><i style="background:#5b8fd6"></i>上回った</span><span><i style="background:#cbd5e1"></i>並み</span><span><i style="background:#e07a6e"></i>下回った</span>';
+      lg = '<span>52週MD の回の結果（計画と比べた回の割合）・数＝下回った回／全部の回</span><span><i style="background:#5b8fd6"></i>上回った</span><span><i style="background:#cbd5e1"></i>並み</span><span><i style="background:#e07a6e"></i>下回った</span>' + asideLg('上回った回の数');
     }
     var vi = 0, rows = VR.map(function (r) {
       if (!r.x) return rowExtra(r);
       var v = V[vi++], cl = !v ? '' : an === 'wx' ? cls(v.d) : an === 'ad' ? cls(v.d - 1) : an === 'ls' && isFinite(v.md) ? (v.d > v.md ? 'dn' : 'up') : '';
-      return rowBtn(r, '<span class="val">' + esc(v ? v.t2 : '') + '</span>' + (v ? bar(v) : '<span class="bar" aria-hidden="true"></span>') + '<span class="pct ' + cl + '">' + esc(v ? v.t : '―') + '</span>');
+      return rowBtn(r, '<span class="pct ' + cl + '">' + esc(v ? v.t : '―') + '</span>' + (v ? bar(v) : '<span class="bar" aria-hidden="true"></span>') + '<span class="val">' + esc(v ? aside(v.t2) : '') + '</span>');
     }).join('');
     var sw = an === 'wx' ? '<div class="wlsw" role="group" aria-label="雨の強さ">' + WL.map(function (t, i) { return '<button type="button" data-wl="' + i + '" aria-pressed="' + (S.wl === i) + '">' + esc(t) + '</button>'; }).join('') + '</div>' : '';
     return '<h2 class="sec" id="dig">掘り下げる — ' + esc(K) + 'ごとの' + esc(AN[an]) + (an === 'wx' ? '（' + esc(mname(S.m, k[0].n)) + '）' : '') + '</h2>' + sw + '<div class="drill an"><div class="lg">' + lg + DC_LG + '</div>' + (tk ? ruler(tk.filter(function (t) { return t[1]; })) : '') + rows + '</div>' + DRILL_HINT;
@@ -879,22 +896,49 @@
     h += '<p class="hint">広告の実績から抜き出した候補（本部の確かめの前）は、店の画面には出しません。</p>';
     return h;
   }
+  /** 年間の流れ（PO 11/17「カレンダーが壊れている」→ 選んだ案: 催事1つを1行の帯に）。12か月の帯（点線＝準備・予約が動く月・塗り＝当日の月・今月の列に色）。
+   *  行を押すと、すぐ下にその催事のひとこと・判断カード・部門ごとの予定が開く（往復 0・開いた行＝S.yo）。前の図は線が箱を貫き、年をまたぐ準備（正月）を描いていなかった */
   function lensYear() {
-    var W = 1180, cw = (W - 60) / 12, lane = {}, maxL = 1;
-    DICT.events.forEach(function (e) { lane[e.month] = (lane[e.month] || 0) + 1; maxL = Math.max(maxL, lane[e.month]); });
-    var H = 90 + maxL * 46, now = new Date().getMonth() + 1; lane = {};
-    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="年間の流れの図" data-u="月ごとの催事（図）"><text x="10" y="18" font-size="14" font-weight="700" fill="#1f2933">年間の流れ（月ごとの催事・線＝準備や予約が動き出す月から当日まで）</text>';
-    for (var i = 0; i < 12; i++) { var x = 50 + i * cw; s += '<rect x="' + x + '" y="34" width="' + (cw - 4) + '" height="' + (H - 64) + '" rx="8" fill="' + (i + 1 === now ? '#e8f0fb' : '#f8fafc') + '" stroke="#d9e0ea"/><text x="' + (x + cw / 2 - 2) + '" y="56" font-size="15" font-weight="800" text-anchor="middle" fill="#0b3a7e">' + (i + 1) + '月</text>'; }
-    DICT.events.forEach(function (e) {
-      var k = lane[e.month] = (lane[e.month] || 0) + 1, x = 50 + (e.month - 1) * cw + 8, y = 66 + (k - 1) * 46;
-      if (e.lead) { var x0 = 50 + (((e.month - e.lead - 1) % 12 + 12) % 12) * cw + cw / 2; if (x0 < x) s += '<line x1="' + x0 + '" y1="' + (y + 17) + '" x2="' + (x + 2) + '" y2="' + (y + 17) + '" stroke="#b45309" stroke-width="3" stroke-dasharray="6 4"/><circle cx="' + x0 + '" cy="' + (y + 17) + '" r="5" fill="#b45309"/>'; }
-      s += '<g data-ev="' + esc(e.id) + '" role="button" tabindex="0" style="cursor:pointer"><rect x="' + x + '" y="' + y + '" width="' + (cw - 20) + '" height="34" rx="7" fill="#fff" stroke="#1f4f8f" stroke-width="1.6"/><text x="' + (x + (cw - 20) / 2) + '" y="' + (y + 22) + '" font-size="12.5" font-weight="700" text-anchor="middle" fill="#1f2933">' + esc(e.name.length > 7 ? e.name.slice(0, 7) + '…' : e.name) + '</text></g>';
-    });
-    s += '<g font-size="12.5" fill="#52606d"><line x1="60" y1="' + (H - 14) + '" x2="96" y2="' + (H - 14) + '" stroke="#b45309" stroke-width="3" stroke-dasharray="6 4"/><text x="102" y="' + (H - 10) + '">準備・予約が動き出す月から当日まで</text><rect x="380" y="' + (H - 24) + '" width="16" height="14" fill="#e8f0fb" stroke="#d9e0ea"/><text x="402" y="' + (H - 12) + '">いまの月</text></g></svg>';
-    return '<h1 class="vt" id="lvtop">年間の流れ<small>' + DICT.events.length + 'の催事</small></h1><div class="box yr"><div class="hint">催事を押すと「催事ごと」が開きます。狭い画面では、図を横に動かせます。</div>' + s + '</div>';
+    var W = 100 / 12, now = new Date().getMonth() + 1, nm = function (i) { return ((i % 12) + 12) % 12; }, O = {};
+    (S.yo || []).forEach(function (id) { O[id] = 1; });
+    var evs = DICT.events.slice().sort(function (a, b) { return a.month - b.month; });
+    var tk = []; for (var i = 0; i < 12; i++) tk.push([(i + 0.5) * W, (i + 1) + '月']);
+    var rows = evs.map(function (e) {
+      var m0 = e.month - 1, s0 = m0 - (e.lead || 0), segs = [];
+      if (e.lead) { if (s0 >= 0) segs.push([s0 * W, (m0 - s0) * W]); else { segs.push([nm(s0) * W, 100 - nm(s0) * W]); if (m0 > 0) segs.push([0, m0 * W]); } }   // 年をまたぐ準備（正月・年始＝11月から）は、右の端と左の端の2本
+      var prep = segs.map(function (g) { return '<i class="pr" style="left:' + g[0].toFixed(2) + '%;width:' + g[1].toFixed(2) + '%"></i>'; }).join('');
+      var day = '<i class="ed" style="left:' + (m0 * W + 0.6).toFixed(2) + '%;width:' + (W - 1.2).toFixed(2) + '%"></i>';
+      var dd = nm(e.month - now), tag = e.month === now ? ' <small class="ytag on">今月</small>' : dd > 0 && dd <= (e.lead || 0) ? ' <small class="ytag">準備中</small>' : '';
+      var op = !!O[e.id];
+      return '<button type="button" class="drow yrow' + (op ? ' open' : '') + '" data-yev="' + esc(e.id) + '" aria-expanded="' + op + '" title="押すと、すぐ下に' + esc(e.name) + 'の部門ごとの予定と判断カードが開きます（もう一度押すと閉じます）">' +
+        '<span class="n"><span class="ar">' + (op ? '▼' : '▶') + '</span><span>' + esc(e.name) + '</span>' + tag + '</span>' +
+        '<span class="pct">' + e.month + '月</span><span class="bar yr12" aria-hidden="true">' + prep + day + '</span>' +
+        '<span class="val">' + esc(aside((e.day || '') + (e.lead ? '・準備 ' + e.lead + 'か月前から' : ''))) + '</span></button>' + (op ? yearOpen(e) : '');
+    }).join('');
+    var lg = '<div class="lg"><span><i style="background:#1f4f8f"></i>当日の月</span><span><i class="lgpr"></i>準備・予約が動く月</span><span><i style="background:#dbe8fb"></i>いまの月（' + now + '月）</span>' + asideLg('日付・準備の始まり') + '</div>';
+    return '<h1 class="vt" id="lvtop">年間の流れ<small>' + DICT.events.length + 'の催事</small></h1>' +
+      '<div class="drill yr" style="--now:' + ((now - 1) * W).toFixed(3) + '%">' + lg + ruler(tk).replace('drow leaf ruler', 'drow leaf ruler yrr') + rows + '</div>' +
+      '<div class="hint">催事の行を押すと、すぐ下にその催事の部門ごとの予定と判断カードが開きます（もう一度押すと閉じる）。全文は「催事ごとで大きく見る」で。</div>';
+  }
+  var YDEPT = { '農産': '青果', '畜産': '精肉', '水産': '水産', '惣菜': '惣菜', '日配': '日配', 'グロッサリー': '一般食品' };   // 辞書の6部門 → 部門の色（POS の部門の名前）
+  function cut1(s, n) { s = String(s || '').split('。')[0]; return s.length > n ? s.slice(0, n) + '…' : s + (s ? '。' : ''); }
+  /** 年間の流れの行の中（押した行のすぐ下）: ひとこと → 判断カード（その催事の印・いつ）→ 部門ごとの予定・注意点（1文ずつ）→ 大きく見る */
+  function yearOpen(e) {
+    var cards = (DICT.cards || []).filter(function (c) { return c.ev === e.name; }), all = e.depts || [];
+    var ds = all.filter(function (d) { return d.schedule || d.caution; });   // 予定も注意点も無い部門（展開の型だけの部門）は、ここには出さない（空の行を出さない・全文は「大きく見る」で）
+    var h = '<div class="yopen">' + (e.note ? '<p class="ynote">' + esc(e.note) + '</p>' : '');
+    if (cards.length) h += '<div class="ycards"><b>判断カード（' + cards.length + '）</b>' + cards.map(function (c) { return '<button type="button" class="kc1" data-card="' + esc(c.id) + '"><span>' + esc(c.title) + '</span><small>' + esc(c.when || '') + (c.dept ? '・' + esc(c.dept) : '') + '</small></button>'; }).join('') + '</div>';
+    if (ds.length) h += '<div class="ydepts"><b>部門ごとの予定・注意点（' + ds.length + '）</b>' + ds.map(function (d) {
+      var c = deptCol(YDEPT[d.dept6] || d.dept6 || d.dept);
+      return '<div class="yd"' + (c ? ' style="--dbg:' + c[0] + ';--dac:' + c[1] + '"' : '') + '><span class="ydn">' + esc(d.dept6 || d.dept) + (d.area && d.area !== '両エリア' ? '<small>' + esc(d.area) + '</small>' : '') + '</span>' +
+        '<span class="yds">' + (d.schedule ? esc(cut1(d.schedule, 70)) : '') + (d.caution ? '<small>注意: ' + esc(cut1(d.caution, 60)) + '</small>' : '') + '</span></div>';
+    }).join('') + '</div>';
+    else if (all.length) h += '<p class="hint" style="margin:4px 0">この催事の部門ごとの型は、展開の型（売場ごと）だけです。「大きく見る」で見られます。</p>';
+    else h += '<p class="hint" style="margin:4px 0">この催事は、部門ごとの型がまだありません（資料に催事固有の指示が無いため）。</p>';
+    return h + '<div class="dopen" style="--dep:1;padding-left:0;background:none;box-shadow:none;border:0"><button type="button" data-ev="' + esc(e.id) + '">' + esc(e.name) + 'を催事ごとで大きく見る（全文・展開の型）▸</button></div></div>';
   }
   var DEPT6 = ['農産', '畜産', '水産', '惣菜', '日配', 'グロッサリー'];   // ヒッスルの部門の並び（PO 11/16「部門の並び順はヒッスルを基準に統一」）
-  var DEPT_MAP = { '農産': ['青果', '農産', '野菜', '果物'], '水産': ['鮮魚', '水産', '塩干'], '畜産': ['精肉', '畜産', '肉'], '惣菜': ['惣菜'], '日配': ['日配'], 'グロッサリー': ['一般食品', '菓子', '酒', 'グロッサリー', '日用'] };
+  var DEPT_MAP = { '農産': ['青果', '農産', '野菜', '果物'], '水産': ['鮮魚', '水産', '塩干'], '畜産': ['精肉', '畜産', '肉'], '惣菜': ['惣菜'], '日配': ['日配'], 'グロッサリー': ['一般食品', '菓子', '酒', 'グロッサリー', '日用', '日雑'] };
   function lensDept() {
     var d = DEPT6[S.dept || 0], h = '<h1 class="vt" id="lvtop">部門ごと<small>判断カード・催事の予定</small></h1>';
     h += '<div class="dchips">' + DEPT6.map(function (x, i) { return '<button type="button" data-dept="' + i + '" aria-pressed="' + (i === (S.dept || 0)) + '">' + esc(x) + '</button>'; }).join('') + '</div>';
@@ -915,7 +959,7 @@
     var b = v >= 0 ? '<i class="u" style="left:50%;width:' + (p - 50) + '%"></i>' : '<i class="d" style="left:' + p + '%;width:' + (50 - p) + '%"></i>';
     var ci = isFinite(lo) && isFinite(hi) ? '<span class="ci" style="left:' + pos(lo) + '%;width:' + Math.max(0.5, pos(hi) - pos(lo)) + '%"></span>' : '';
     var el = attrs ? 'button type="button"' : 'div';
-    return '<' + el + ' class="drow' + (attrs ? '' : ' leaf') + '"' + (attrs || '') + '><span class="n"><span class="ar">' + (attrs ? '▶' : '・') + '</span><span>' + esc(label) + '</span>' + (tag || '') + '</span><span class="val">' + esc(sub || '') + '</span><span class="bar" aria-hidden="true"><span class="zl"></span>' + b + ci + '</span><span class="pct ' + cls(v) + '">' + sg(v) + '%</span></' + (attrs ? 'button' : 'div') + '>';
+    return '<' + el + ' class="drow' + (attrs ? '' : ' leaf') + '"' + (attrs || '') + '><span class="n"><span class="ar">' + (attrs ? '▶' : '・') + '</span><span>' + esc(label) + '</span>' + (tag || '') + '</span><span class="pct ' + cls(v) + '">' + sg(v) + '%</span><span class="bar" aria-hidden="true"><span class="zl"></span>' + b + ci + '</span><span class="val">' + esc(aside(sub)) + '</span></' + (attrs ? 'button' : 'div') + '>';
   }
   function wxTop() {
     var W = DICT.weather || {}, hq = ME && (ME.role === 'hq' || ME.role === 'admin'), st = curStoreTop(), h = '';
@@ -930,21 +974,27 @@
     // ② 全店・エリアの効き（同じ0の線・細い線＝確からしい幅）
     if (evRows.length) {
       var R = 5; evRows.forEach(function (r) { r.ev.areas.forEach(function (a) { R = Math.max(R, Math.abs(a.v), isFinite(a.lo) ? Math.abs(a.lo) : 0); }); }); R = Math.min(40, Math.ceil(R / 5) * 5);
-      h += '<h2 class="sec" id="wxall">天気で来客数がどう動くか — 全店とエリア</h2><div class="drill an"><div class="lg"><span>その天気の日の来客数（同じ店・同じ曜日・同じ月のふだんとの差）</span><span><i style="background:#e07a6e"></i>減る</span><span><i style="background:#5b8fd6"></i>増える</span><span><i style="background:#1f2933;height:2px;vertical-align:3px"></i>確からしい幅</span><span>目盛りの端 ±' + R + '%</span></div>' +
+      h += '<h2 class="sec" id="wxall">天気で来客数がどう動くか — 全店とエリア</h2><div class="drill an"><div class="lg"><span>その天気の日の来客数（同じ店・同じ曜日・同じ月のふだんとの差）</span><span><i style="background:#e07a6e"></i>減る</span><span><i style="background:#5b8fd6"></i>増える</span><span><i style="background:#1f2933;height:2px;vertical-align:3px"></i>確からしい幅</span><span>目盛りの端 ±' + R + '%</span>' + asideLg('確からしさ') + '</div>' +
         evRows.map(function (r) { return '<div class="grp">' + esc(r.what) + '｜' + esc(r.hitokoto || '') + '</div>' + r.ev.areas.map(function (a) { return ciRow(a.label, a.v, a.lo, a.hi, R, '', '', '確か ' + (a.sure || '―')); }).join(''); }).join('') + '</div>';
     }
     // ③ 店ごと（本部だけ・店の人にはほかの店の名前と数を出さない）
-    if (hq) {
+    if (hq && W32) h += w32Block();
+    else if (hq) {
+      w32Load();
       var code = {}; ((ME.map && ME.map.areas) || []).forEach(function (a) { a.stores.forEach(function (s) { code[s.nm] = s; code[String(s.nm).replace(/店$/, '')] = s; }); });
       var pick = evRows.filter(function (r) { return r.ev.stores && r.ev.stores.length; }), cur = pick[S.wl === 1 ? 0 : 1] || pick[0];
       if (cur) {
         var ss = cur.ev.stores.slice().sort(function (a, b) { return a.v - b.v; }), Rs = 10; ss.forEach(function (s) { Rs = Math.max(Rs, Math.abs(s.v), isFinite(s.lo) ? Math.abs(s.lo) : 0); }); Rs = Math.min(50, Math.ceil(Rs / 5) * 5);
         h += '<h2 class="sec" id="wxstores">店ごとの違い — ' + esc(cur.what) + '（本部だけ）</h2>' +
           '<div class="wlsw" role="group" aria-label="雨の強さ">' + pick.map(function (r) { var i = /強い/.test(r.what) ? 1 : 0; return '<button type="button" data-wl="' + i + '" aria-pressed="' + (r === cur) + '">' + esc(r.what) + '</button>'; }).join('') + '</div>' +
-          '<div class="drill an"><div class="lg"><span>店ごとの来客数の差（減る順）</span><span><i style="background:#1f2933;height:2px;vertical-align:3px"></i>確からしい幅</span><span>目盛りの端 ±' + Rs + '%</span></div>' +
+          '<div class="drill an"><div class="lg"><span>店ごとの来客数の差（減る順）</span><span><i style="background:#1f2933;height:2px;vertical-align:3px"></i>確からしい幅</span><span>目盛りの端 ±' + Rs + '%</span>' + asideLg('エリア・雨の日の数') + '</div>' +
           ss.map(function (s) { var m = code[s.name] || code[s.name + '店']; return ciRow(s.name, s.v, s.lo, s.hi, Rs, m ? ' data-wxstore="' + esc(m.c) + '" title="押すと、' + esc(m.nm) + 'の雨の日の効きを部門・クラスまで見られます"' : '', m && m.nc ? ' <small class="nctag">比べない</small>' : '', (s.area || '') + (s.days ? '・' + s.days + '日' : '')); }).join('') + '</div>' +
-          '<div class="hint">店を押すと、その店のステータスが「雨の日の効き」で開き、部門 → 中分類 → クラスへ掘れます。' + (cur.ev.stores_note ? esc(cur.ev.stores_note) : '') + '</div>';
+          '<div class="hint">店を押すと、その店のステータスが「雨の日の効き」で開き、部門 → 中分類 → クラスへ掘れます。' + (cur.ev.stores_note ? esc(cur.ev.stores_note) : '') + '</div>' +
+          (W32_ERR ? '<div class="hint">店の中（部門 → クラス）の数を受け取れませんでした（' + esc(W32_ERR) + '）。<button type="button" class="hbtn" data-w32retry="1">もう一度受け取る</button>　<a href="reports/#/WEATHER/w-s3b">分析レポートの 3-2 で見る ▸</a></div>'
+            : '<div class="hint wait"><span class="spin" aria-hidden="true"></span>店の中（部門 → 中分類 → クラス）の数を受け取っています…（数秒・届いたら、この一覧が押して開ける形に替わります）</div>');
       }
+    }
+    if (hq) {
       h += '<div class="box"><h3>図とグラフで全部見る（分析レポート「売れ方・ロス・天気の分析」・本部だけ）</h3><div class="chips">' +
         [['w-s1', '結論'], ['w-s3', '天気と来客数'], ['w-s3b', '店ごとの違い'], ['w-s3c', '部門ごとの店の並び'], ['w-s4', '部門ごとの買い方'], ['w-s4c', '雨の日に減る小分類'], ['w-s6', '時間帯と雨'], ['w-s6c', '天気と売れ残り']].map(function (x) { return '<a class="chip" href="reports/#/WEATHER/' + x[0] + '">' + esc(x[1]) + ' ▸</a>'; }).join('') + '</div></div>';
     }
@@ -1051,6 +1101,136 @@
     var bin = atob(b64), n = bin.length, u = new Uint8Array(n);
     for (var i = 0; i < n; i++) u[i] = bin.charCodeAt(i);
     return new Response(new Blob([u]).stream().pipeThrough(new DecompressionStream('gzip'))).text().then(JSON.parse);
+  }
+  // ── 天気と売れ方の「店ごとの違い」（PO 11/17「ドリルダウン型で深掘りできるのは、この画面で直ぐにできないと不便。いちいち詳細深堀りでは面倒」「読み込みせずとも見られるように」）
+  // 数は分析レポート「売れ方・ロス・天気の分析」の 3-2 と同じ物（同じファイルの中の図のデータ＝script.tdata・script.tdeep）。窓口は分析レポートの口（本部・管理者だけ・アプリの札で通る）。
+  // 本部が入ったら裏で1回だけ受け取って解いておく（往復2本・約 0.8MB）→ 店・部門・中分類・小分類・クラスは、押したらすぐ開く（往復 0）
+  // 行＝[段, 親の番号, 名前の番号, 印〔4＝開ける〕, 値の組 g＝0〜3 を4つずつ〔左×10, 左の確かさ, 右×10, 右の確かさ〕, …]。g＝雨の強さ×2＋指標（0 売上・1 来客数）
+  //   店の行の後ろ（c.XO から）＝[店コード, エリア〔0 北関東・1 首都圏〕, 値の組ごとの左の値の95%の幅の下×10・上×10]
+  var W32 = null, W32_P = null, W32_ERR = '', W32_LABEL = '';
+  function w32FromHtml(html) {
+    var a = /<script type="application\/json" class="tdata">([\s\S]*?)<\/script>/.exec(html), b = /<script type="text\/plain" class="tdeep">([\s\S]*?)<\/script>/.exec(html);
+    if (!a || !b) return Promise.reject(new Error('レポートの中に 3-2 の図のデータがありません'));
+    var j = JSON.parse(a[1].replace(/<\\\//g, '</'));
+    // 図のデータの形（V11・V12 の形）を確かめる。違う形のレポートが置かれたら、描かずに「受け取れませんでした」へ（これまでの店の一覧が出る）
+    var c0 = j && j.c;
+    if (!c0 || typeof c0.XO !== 'number' || !Array.isArray(c0.S) || c0.S.length < 2 || !Array.isArray(c0.RN) || c0.RN.length < 2 || !Array.isArray(c0.AREA) || !Array.isArray(j.n) || !Array.isArray(j.r) || !j.r.length || j.r[0].length < c0.XO + 2)
+      return Promise.reject(new Error('レポートの 3-2 の図のデータの形が、この画面の知っている形と違います'));
+    var d = { c: j.c, n: j.n.slice(), r: j.r.slice(), k: [], top: [], st: [] };
+    var bin = atob(b[1].replace(/\s+/g, '')), u = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    return new Response(new Blob([u]).stream().pipeThrough(new DecompressionStream('deflate'))).text().then(function (t) {
+      var q = JSON.parse(t), n0 = d.n.length, c = q.c, p = 0;
+      q.n.forEach(function (x) { d.n.push(x); });
+      for (var i = 0; i < c[0].length; i++) { var x = new Array(c.length); for (var k = 0; k < c.length; k++) x[k] = c[k][i]; p += x[1]; x[1] = p; x[2] += n0; d.r.push(x); }   // 列ごとの並び → 行（親の番号は1つ前との差）
+      for (var r = 0; r < d.r.length; r++) { d.k[r] = []; var pp = d.r[r][1]; if (pp >= 0) { d.k[pp].push(r); d.st[r] = d.st[pp]; } else { d.st[r] = r; d.top.push(r); } }
+      return d;
+    });
+  }
+  function w32Load() {
+    if (W32 || W32_P || W32_ERR || !ME || !(ME.role === 'hq' || ME.role === 'admin')) return W32_P;
+    if (!CAN_GZ || !(window.crypto && crypto.subtle) || typeof TextDecoder !== 'function') { W32_ERR = 'この端末のブラウザでは開けません'; return null; }
+    var t0 = performance.now(), it = null;
+    W32_P = AUTH.call('reportList').then(function (r) {
+      it = r && r.ok && Array.isArray(r.reports) ? r.reports.filter(function (x) { return x && x.key === 'WEATHER' && /^[0-9a-f]{64}$/.test(x.sha256 || '') && x.parts > 0 && x.parts < 20; })[0] : null;
+      if (!it) throw new Error((r && r.error) || '分析レポートの一覧に「売れ方・ロス・天気の分析」がありません');
+      var ps = []; for (var n = 0; n < it.parts; n++) ps.push(AUTH.call('reportPart', { key: 'WEATHER', n: n, want: it.sha256, bg: true }));   // bg＝裏の受け取り（レポートを見た記録に数えない・窓口 11-17c）
+      return Promise.all(ps);
+    }).then(function (rs) {
+      var bufs = rs.map(function (x, i) {
+        if (!x || !x.ok || x.n !== i || x.sha256 !== it.sha256 || typeof x.data !== 'string') throw new Error((x && x.error) || '分析レポートを受け取れませんでした');
+        var s = atob(x.data), u = new Uint8Array(s.length); for (var k = 0; k < s.length; k++) u[k] = s.charCodeAt(k); return u;
+      });
+      return new Response(new Blob(bufs).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+    }).then(function (ab) {
+      return crypto.subtle.digest('SHA-256', ab).then(function (h) {
+        var hx = Array.prototype.map.call(new Uint8Array(h), function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+        if (hx !== it.sha256) throw new Error('受け取ったレポートが元のファイルと違います');
+        W32_LABEL = String(it.label || '') + (it.date ? '・' + it.date : '');
+        return new TextDecoder('utf-8').decode(ab);
+      });
+    }).then(w32FromHtml).then(function (d) {
+      d.ms = Math.round(performance.now() - t0); W32 = d; W32_P = null;
+      window.__statusT = window.__statusT || {}; window.__statusT.w32 = d.ms;
+      if (S.view === 'wx') render({ keep: true });
+    }).catch(function (e) {
+      W32_P = null; W32_ERR = String(e && e.message || e).slice(0, 120);
+      if (S.view === 'wx') render({ keep: true });
+    });
+    return W32_P;
+  }
+  var W32_PRE = /^(Ａコープ|ＪＡＦ|JAF|Aコープ|新鮮ぐんま)\s*/;
+  function w32Nm(d, i) { var nm = d.n[d.r[i][2]]; return d.r[i][0] === 0 ? String(nm).replace(W32_PRE, '').replace(/店$/, '') : nm; }
+  function w32V(d, i, b) { var v = d.r[i][b]; return v === null || v === undefined ? null : v / 10; }
+  // 確かさの段（レポートと同じ決まり）: 0＝塗り（95%以上）・1＝枠だけ（70〜95%・中分類の「95%未満」）・2＝点線の枠（70%未満）
+  function w32Tier(k) { if (k === null || k === undefined) return 2; if (k > 100) return k === 101 ? 1 : 0; return k >= W32.c.LINE ? 0 : k >= W32.c.LOW ? 1 : 2; }
+  function w32Cf(k) { return k === null || k === undefined ? '—' : k > 100 ? ['95%未満', '95〜99%', '99%以上'][k - 101] : k >= 99 ? '99%以上' : k + '%'; }
+  function w32Cmp(d, b) { return function (x, y) { var p = d.r[x][b], q = d.r[y][b], np = p === null || p === undefined, nq = q === null || q === undefined; if (np !== nq) return np ? 1 : -1; if (!np && p !== q) return p - q; return x - y; }; }
+  function w32Kids(d, i, b) { var k = d.k[i].slice(); if (k.length && d.r[k[0]][0] !== 1) k.sort(w32Cmp(d, b)); return k; }   // 部門は決めた順のまま・店と中分類より下は、減りの大きい順
+  function w32Dept(d, i) { var x = i; while (x >= 0 && d.r[x][0] > 1) x = d.r[x][1]; return x >= 0 && d.r[x][0] === 1 ? d.n[d.r[x][2]] : null; }
+  function w32Vis(d, b) {
+    var O = {}, out = []; (S.wo || []).forEach(function (i) { O[i] = 1; });
+    (function walk(list, dep) {
+      list.forEach(function (i) {
+        var can = !!(d.r[i][3] & 4) && d.k[i].length > 0, op = can && !!O[i];
+        out.push({ i: i, dep: dep, can: can, open: op });
+        if (op) { walk(w32Kids(d, i, b), dep + 1); if (dep === 0) out.push({ end: i }); }
+      });
+    })(d.top.slice().sort(w32Cmp(d, b)), 0);
+    return out;
+  }
+  function w32Bar(v, R, ref, t, lo, hi) {
+    var pos = function (x) { return 50 + Math.max(-R, Math.min(R, x)) / R * 50; }, p = pos(v), c = (v >= 0 ? 'u' : 'd') + (t ? ' t' + t : '');
+    var b = v >= 0 ? '<i class="' + c + '" style="left:50%;width:' + (p - 50) + '%"></i>' : '<i class="' + c + '" style="left:' + p + '%;width:' + (50 - p) + '%"></i>';
+    var cut = Math.abs(v) > R ? '<span class="cut ' + cls(v) + '" style="' + (v > 0 ? 'right:0' : 'left:0') + '">' + (v > 0 ? '›' : '‹') + '</span>' : '';
+    var ci = lo !== null && hi !== null && isFinite(lo) && isFinite(hi) ? '<span class="ci" style="left:' + pos(lo) + '%;width:' + Math.max(0.5, pos(hi) - pos(lo)) + '%"></span>' : '';
+    return '<span class="bar" aria-hidden="true"><span class="zl"></span>' + (ref !== null && isFinite(ref) ? '<span class="pl" style="left:' + pos(ref) + '%"></span>' : '') + b + cut + ci + '</span>';
+  }
+  function w32Row(d, x, g, R, known) {
+    var i = x.i, r = d.r[i], lv = r[0], b = 4 + 4 * g, m = g & 1, X = d.c.XO;
+    var l = w32V(d, i, b), rv = w32V(d, i, b + 2), ref = lv ? w32V(d, d.st[i], b) : null;
+    var lo = lv === 0 ? w32V(d, i, X + 2 + 2 * g) : null, hi = lv === 0 ? w32V(d, i, X + 3 + 2 * g) : null;
+    var dn = lv ? w32Dept(d, i) : null, c = dn ? deptCol(dn) : null, sty = (c ? '--dbg:' + c[0] + ';--dac:' + c[1] + ';' : '') + (x.dep ? '--dep:' + x.dep + ';' : '');
+    var rl = lv === 0 ? (m ? '1人あたり点数' : '客単価') : (m ? '1人あたり点数' : '1人あたり売上');
+    var s = lv === 0 ? known[String(r[X])] : null, tag = lv === 0 ? ' <small>' + esc(d.c.AREA[r[X + 1]] || '') + '</small>' + (s && s.nc ? ' <small class="nctag">比べない</small>' : '') : '';
+    var pth = []; for (var k = i; k >= 0; k = d.r[k][1]) pth.unshift(d.n[d.r[k][2]]);
+    var tip = pth.join(' ▸ ') + '｜' + d.c.RN[g >> 1] + 'の日｜' + (lv === 0 ? (m ? '来客 ' : '店全体の売上 ') : (m ? '買った人の数 ' : '売上 ')) + (l === null ? '—（数えていない）' : sg(l) + '%（確かさ ' + w32Cf(r[b + 1]) + '）') +
+      '｜' + rl + ' ' + (rv === null ? '—' : sg(rv) + '%（確かさ ' + w32Cf(r[b + 3]) + '）') + (x.can ? '｜押すと、すぐ下に' + ['部門', '中分類', '小分類', 'クラス'][lv] + 'が開きます' : '');
+    return '<button type="button" class="drow' + (x.can ? '' : ' leaf') + (c ? ' dc' : '') + (lv ? ' sub' : '') + (x.open ? ' open' : '') + '"' + (x.can ? ' data-w32="' + i + '" aria-expanded="' + x.open + '"' : '') + (sty ? ' style="' + sty + '"' : '') + ' title="' + esc(tip) + '">' +
+      '<span class="n"><span class="ar">' + (x.can ? (x.open ? '▼' : '▶') : '・') + '</span><span>' + esc(w32Nm(d, i)) + '</span>' + tag + '</span>' +
+      '<span class="pct ' + (l === null ? '' : cls(l)) + '">' + (l === null ? '—' : sg(l) + '%') + '</span>' +
+      (l === null ? '<span class="bar" aria-hidden="true"></span>' : w32Bar(l, R, ref, w32Tier(r[b + 1]), lo, hi)) +
+      '<span class="val">' + esc(rv === null ? '' : aside(rl + ' ' + sg(rv) + '%')) + '</span></button>';
+  }
+  /** 天気と売れ方の「店ごとの違い」（本部だけ）。雨の強さ（S.wl）×見る数（S.wm: 0 売上・1 来客数）。開いた行＝S.wo（行の番号） */
+  function w32Block() {
+    var d = W32, rain = S.wl === 1 ? 1 : 0, m = S.wm === 1 ? 1 : 0, g = rain * 2 + m, b = 4 + 4 * g, sc = d.c.S[rain], R = Math.max(-sc.lo, sc.hi);
+    var known = {}; ((ME.map && ME.map.areas) || []).forEach(function (a) { a.stores.forEach(function (s) { known[String(s.c)] = s; }); });
+    var rows = w32Vis(d, b).map(function (x) {
+      if (x.end === undefined) return w32Row(d, x, g, R, known);
+      var code = String(d.r[x.end][d.c.XO]), s = known[code];
+      return s ? '<div class="dopen" style="--dep:1"><button type="button" data-wxstore="' + esc(code) + '">' + esc(s.nm) + 'のステータスを開く（前年比・ロス・広告なども）▸</button></div>' : '';
+    }).join('');
+    var rn = d.c.RN[rain], mn = m ? '来客数' : '売上';
+    var sw = '<div class="w32sw"><span class="lb">雨の強さ</span><div class="wlsw" role="group" aria-label="雨の強さ">' + d.c.RN.map(function (t, i) { return '<button type="button" data-wl="' + i + '" aria-pressed="' + (rain === i) + '">' + esc(t) + '</button>'; }).join('') + '</div>' +
+      '<span class="lb">見る数</span><div class="wlsw" role="group" aria-label="見る数">' + ['売上', '来客数'].map(function (t, i) { return '<button type="button" data-wm="' + i + '" aria-pressed="' + (m === i) + '">' + t + '</button>'; }).join('') + '</div></div>';
+    // 凡例は短い言葉で（スマホで1行に2〜3つ入るように・PO 11/17 の図の見やすさ）。細かい読み方は図の下の一文へ
+    var lg = '<div class="lg"><span>' + esc(rn) + 'の日の' + mn + '（ふだんとの差・前年比ではない）</span>' +
+      '<span><i style="background:#e07a6e"></i>減る</span><span><i style="background:#5b8fd6"></i>増える</span>' +
+      '<span><i class="lgt"></i>はっきり（95%以上）</span><span><i class="lgt t1"></i>傾向（70〜95%）</span><span><i class="lgt t2"></i>たまたま（70%未満）</span>' +
+      '<span><i style="border-left:2px dashed #7c3aed;width:0"></i>その店</span><span><i style="background:#1f2933;height:2px;vertical-align:3px"></i>店の95%の幅</span>' +
+      '<span>端 ±' + R + '%</span>' + asideLg(m ? '1人あたり点数' : '1人あたり売上') + '</div>';
+    return '<h2 class="sec" id="wxstores">店ごとの違い — ' + esc(rn) + 'の日の' + mn + '（本部だけ）</h2>' + sw + '<div class="drill an w32">' + lg + ruler(divTicks(R, 0, pctTick)) + rows + '</div>' +
+      '<div class="hint">店の行を押すと、すぐ下に部門が開きます。部門 → 中分類 → 小分類 → クラスと、押すたびに細かく開きます（もう一度押すと閉じる）。' +
+      '店の行は店全体の' + (m ? '来客数（（ ）は1人あたり点数）' : '売上（（ ）は客単価）') + '、部門より下は' + (m ? 'その分類を買った人の数' : 'その分類の売上') + 'です。棒の塗り・枠・点線は、数の確かさ（ふだんの揺れで説明できない確からしさ）。紫の点線は、その店の値です。行の地の色・左の帯は部門の印（増え減りの色ではありません）。' +
+      '数は分析レポート「売れ方・ロス・天気の分析」' + (W32_LABEL ? '（' + esc(W32_LABEL) + '）' : '') + 'の 3-2 と同じです。<a href="reports/#/WEATHER/w-s3b">レポートの 3-2 で見る ▸</a></div>';
+  }
+  function w32Toggle(i) {
+    var d = W32; if (!d || !d.r[i] || !(d.r[i][3] & 4) || !d.k[i].length) return;
+    var o = (S.wo || []).slice();
+    if (o.indexOf(i) >= 0) o = o.filter(function (j) { if (j === i) return false; for (var x = d.r[j][1], n = 0; x >= 0 && n++ < 8; x = d.r[x][1]) if (x === i) return false; return true; });   // 閉じるときは、その中で開いていた行も閉じる
+    else o.push(i);
+    go({ wo: o }, { keep: true });
   }
   // 本部が店を次々に開いても重くならないよう、端末に持つ店の木は新しい3店まで（古い店は、もう一度開いたときに受け取り直す・往復1本）
   var KEPT = [], KEEP_MAX = 3;
@@ -1191,6 +1371,11 @@
       if (ds.wl != null) { go({ wl: +ds.wl }, { keep: true }); return; }
       if (ds.m) { go({ m: ds.m }, { keep: true }); return; }
       if (ds.tog) { toggleOpen(ds.tog); return; }   // 掘り下げの行: その場で開く・閉じる
+      if (ds.w32 != null) { w32Toggle(+ds.w32); return; }   // 天気と売れ方の店ごとの違い: その場で開く・閉じる（往復 0）
+      if (ds.wm != null) { go({ wm: +ds.wm }, { keep: true }); return; }   // 同: 売上／来客数
+      if (ds.w32retry) { W32_ERR = ''; w32Load(); render({ keep: true }); return; }
+      if (ds.yev) { var yo = (S.yo || []).slice(), yi = yo.indexOf(ds.yev); if (yi >= 0) yo.splice(yi, 1); else yo.push(ds.yev); go({ yo: yo }, { keep: true }); return; }   // 年間の流れの行: すぐ下に開く（往復 0）
+      if (ds.mtog) { var mo = (S.mo || []).slice(), mi = mo.indexOf(ds.mtog); if (mi >= 0) mo.splice(mi, 1); else mo.push(ds.mtog); go({ mo: mo }, { keep: true }); return; }   // 本部の地図の店の行: すぐ下に部門（往復 0）
       if (ds.c3rot != null) { var dr = +ds.c3rot; C3.yaw = dr ? Math.max(-80, Math.min(80, C3.yaw + dr)) : C3.YAW0; c3Redraw(); return; }   // 立体の棒を回す（図だけ描き直す・往復 0）
       if (ds.dsel) { if ((S.path.length > 1 ? S.path[1] : 'S') !== ds.dsel || S.path.length > 2) go({ view: 'status', path: ds.dsel === 'S' ? ['S'] : ['S', ds.dsel] }, { keep: true }); return; }   // 見る範囲（部門）: 分析の見方はそのまま、範囲だけ替える
       if (ds.drill) { drillTo(ds.drill); return; }
@@ -1239,6 +1424,7 @@
       window.__statusT = { start: performance.now() - t0 };
       if (CUR) ensureTree();
       loadDict();   // 辞書の中身と探す欄の読みの表を、裏で受け取る（型の選び・探すは、そのあと往復 0）
+      if (r.role === 'hq' || r.role === 'admin') setTimeout(w32Load, 1200);   // 天気と売れ方の店ごとの違い（分析レポート 3-2 と同じ数）を、最初の画面のあとに裏で受け取る
     }, function () { showGate('通信できませんでした。通信の状態を確かめて、もう一度お試しください。', true, function () { onReady(email); }); });   // 通信の失敗と、描く所の失敗を分けて知らせる
   }
   /** 見た目のファイルが、この画面の版の物か（公開の直後に、古い見た目のファイルと組みで読まれたことがある・2026-11-16）。違えば、版の印つきで読み直す（1回だけ） */
@@ -1260,6 +1446,6 @@
     bind();
     AUTH.start(onReady, { gate: showGate, busy: showBusy });
   });
-  window.STATUS_APP = { go: go, back: back, drillTo: drillTo, state: S, fhUpdate: fhUpdate, openSec: function (id) { openSec(id); }, tree: function () { return TREE; }, me: function () { return ME; }, kept: function () { return Object.keys(DATA).filter(function (c) { return DATA[c] && DATA[c].tree; }).length; }, dict: function () { return DICT; },
+  window.STATUS_APP = { go: go, back: back, drillTo: drillTo, state: S, fhUpdate: fhUpdate, openSec: function (id) { openSec(id); }, tree: function () { return TREE; }, me: function () { return ME; }, kept: function () { return Object.keys(DATA).filter(function (c) { return DATA[c] && DATA[c].tree; }).length; }, dict: function () { return DICT; }, busy: function () { return !!(TREE_P || W32_P); },   // busy＝店の木・3-2 の数を裏で受け取っている最中（試験が、届いた後の描き直しと押すのが重ならないように待つ）
     find: function (q) { var i = $('#q1'); i.value = q; search(i, $('#r1')); return $$('#r1 button[data-hit]').map(function (b) { return b.textContent; }); } };
 })();
