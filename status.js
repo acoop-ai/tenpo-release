@@ -57,11 +57,37 @@
   // an＝見る分析（2026-11-15 PO: 店の最初の画面は2つの分析の中身から。札で選び、部門 → 中分類 → クラスへ同じ分析のまま掘る）。wl＝雨の強さ（0＝雨 10mm〜・1＝強い雨 30mm〜）
   // open＝掘り下げで、その場で開いた行（PO 11/16「部門を選ぶと別画面に飛ばされて、今どこにいるかわからなくなる」→ 押した行のすぐ下に中を開く）。段（path）が替われば閉じる
   // mo＝本部の地図の店の比較で開いた行（店のコード、または「店のコード:分類の番号」＝店 → 部門 → 中分類 → クラスをその場で・11/17d）。mmo＝今月の型の掘り下げで開いた行。eo＝催事の掘り下げで開いた行（催事|部門|区分）。dept＝部門ごとの POS の部門の名前
-  var S = { view: 'home', path: ['S'], m: 'a', an: 'yo', wl: 0, open: [], wo: [], wm: 0, mo: [], yo: [], mmo: [], eo: [], mdp: (function () { try { return localStorage.getItem('storeops_mdp_v1') || ''; } catch (e) { return ''; } })() };   // mdp＝本部の地図の見る範囲（部門のコード・空＝全社）。この端末に覚える
+  var S = { view: 'home', path: ['S'], m: 'a', an: 'yo', wl: 0, from: 0, open: [], wo: [], wm: 0, mo: [], yo: [], mmo: [], eo: [], mdp: (function () { try { return localStorage.getItem('storeops_mdp_v1') || ''; } catch (e) { return ''; } })() };   // mdp＝本部の地図の見る範囲（部門のコード・空＝全社）。この端末に覚える
   var HIST = [];
-  function snap() { return JSON.stringify({ view: S.view, path: S.path, m: S.m, an: S.an, wl: S.wl, open: S.open, wo: S.wo, wm: S.wm, mo: S.mo, yo: S.yo, mmo: S.mmo, eo: S.eo, month: S.month, ev: S.ev, dept: S.dept, mdp: S.mdp, c: CUR, y: window.scrollY }); }
-  // how.part＝描き直す塊（行を押してその場で開く・閉じるときは、その塊だけを入れ替える。PO 11/17「1つ押すたびに全部を描き直さない」）
-  function go(ch, how) { HIST.push(snap()); if (HIST.length > 200) HIST.shift(); for (var k in ch) S[k] = ch[k]; if ('path' in ch && !('open' in ch)) S.open = []; if (how && how.part && redraw(how.part)) return; render(how || {}); }
+  function snap() { return JSON.stringify({ view: S.view, path: S.path, m: S.m, an: S.an, wl: S.wl, open: S.open, wo: S.wo, wm: S.wm, mo: S.mo, yo: S.yo, mmo: S.mmo, eo: S.eo, month: S.month, ev: S.ev, dept: S.dept, mdp: S.mdp, from: S.from || 0, c: CUR, y: window.scrollY }); }
+  // ── 来た所（11/17e PO 問3 A・T2）: 中の釦（大きく開く・〇〇を見る・催事ごとで大きく見る など）で上の帯のタブが替わったら、その下の帯の左に「← 〇〇に戻る」。
+  //   S.from＝来た所の番号（FROMS の鍵）。来た所の見方（snap）を覚え、押すとそこへ（位置も）。上の帯のタブ・利用ガイドの「この画面へ」で移ったら消す。「← ひとつ前に戻る」は覚えた見方ごと戻すので、札も元どおり
+  var FROMS = {}, FROM_N = 0, NAV0 = null, LAST = { ev: '', dept: '' };
+  function lensKey(v) { return v === 'status' ? 'home' : v; }
+  /** 履歴に積む（見方が替わる前に1回）。kind: ''＝中の釦（タブが替われば来た所を覚える）／'tab'＝上の帯のタブ（来た所を消す）／'keep'＝来た所はそのまま／'scroll'＝位置だけ */
+  function pushHist(kind) { var s = snap(); HIST.push(s); if (HIST.length > 200) HIST.shift(); NAV0 = kind === 'scroll' ? null : { k: lensKey(S.view), nm: placeName(), s: s, kind: kind || '' }; }
+  function fromSettle() {
+    var n = NAV0; NAV0 = null; if (!n || n.kind === 'keep') return;
+    if (n.kind === 'tab') { S.from = 0; return; }
+    if (lensKey(S.view) === n.k || !n.nm) return;
+    FROMS[++FROM_N] = { nm: n.nm, s: n.s }; S.from = FROM_N;
+    if (FROM_N > 200) delete FROMS[FROM_N - 200];   // 覚えるのは 200 まで（履歴と同じ）
+  }
+  /** いまの場所の名前（来た所の札・利用ガイドの「いまここ」） */
+  function placeName() {
+    var v = S.view, hq = ME && (ME.role === 'hq' || ME.role === 'admin');
+    if (v === 'home' || v === 'status') {
+      if (!CUR) return hq ? '全店のいま' : 'いまの様子';
+      var n = (SUM || TREE) && S.path.length > 1 ? N()[S.path[S.path.length - 1]] : null;
+      return storeName(CUR) + 'のいま' + (n ? '（' + n.n + '）' : '');
+    }
+    if (v === 'month') return '今月の型（' + (S.month || (new Date().getMonth() + 1)) + '月）';
+    if (v === 'event') return '催事ごと' + (LAST.ev ? '（' + LAST.ev + '）' : '');
+    if (v === 'dept') return '部門ごと' + (LAST.dept ? '（' + LAST.dept + '）' : '');
+    return { year: '年間の流れ', wx: '天気と売れ方', admin: '更新の状態', guide: '利用ガイド' }[v] || '';
+  }
+  // how.part＝描き直す塊（行を押してその場で開く・閉じるときは、その塊だけを入れ替える。PO 11/17「1つ押すたびに全部を描き直さない」）。how.nav＝pushHist の kind
+  function go(ch, how) { pushHist(how && how.nav); for (var k in ch) S[k] = ch[k]; if ('path' in ch && !('open' in ch)) S.open = []; if (how && how.part && redraw(how.part)) { NAV0 = null; return; } render(how || {}); }
   // ── 描き直す塊: 全体を描くときに、塊ごとに「その塊を作る関数」を覚える（全体を描くたびに作り直す＝前の画面の関数は持ち続けない）
   var PART = {};
   function blk(id, fn) { PART[id] = fn; return '<div class="blk" id="' + id + '">' + fn() + '</div>'; }
@@ -76,10 +102,18 @@
     if (a && a !== document.body && el.contains(a) && a.dataset) for (var i = 0; i < FOCUS_KEYS.length; i++) if (a.dataset[FOCUS_KEYS[i]] != null) { fk = '[data-' + FOCUS_KEYS[i] + '="' + String(a.dataset[FOCUS_KEYS[i]]).replace(/["\\]/g, '\\$&') + '"]'; break; }
     fhReset(); el.innerHTML = fn();
     if (fk) { var f = el.querySelector(fk); if (f) { try { f.focus({ preventScroll: true }); } catch (e) { /* 古いブラウザ */ } } }   // 押した行に、キーボードの位置を戻す
-    $('#back').disabled = !HIST.length; fhSchedule();
+    setBack(); fhSchedule();
     return true;
   }
-  function back() { if (!HIST.length) return; var o = JSON.parse(HIST.pop()), y = o.y, c = o.c; delete o.y; delete o.c; for (var k in o) S[k] = o[k]; if (!o.open) S.open = []; if (c !== CUR) useStore(c); render({ y: y, msg: '← 元の見方に戻りました' }); }
+  function restoreSnap(str, msg) {
+    NAV0 = null; var o = JSON.parse(str), y = o.y, c = o.c, same = o.view === 'guide' && S.view === 'guide'; delete o.y; delete o.c;
+    for (var k in o) S[k] = o[k]; if (!o.open) S.open = []; if (c !== CUR) useStore(c);
+    if (same) { setBack(); pbar(); SPY.pin = ''; glide(y); if (msg) toast(msg); return; }   // ガイドの中で戻る: 描き直さずに位置だけ
+    render({ y: y, msg: msg });
+  }
+  function back() { if (!HIST.length) return; restoreSnap(HIST.pop(), '← 元の見方に戻りました'); }
+  /** 「← 〇〇に戻る」: 来た所の見方（位置も）へ。いまの見方は履歴に積む（「← ひとつ前に戻る」で、また移った先へ） */
+  function fromBack() { var f = S.from && FROMS[S.from]; if (!f) return; pushHist('keep'); restoreSnap(f.s, '← ' + f.nm + 'に戻りました'); }
   // 部門の色（行の地の淡い色＋左の帯）。🔴 正は作業フォルダの `_共通\部門の色\dept_colors.json`（ヒッスルの部門の名前とも対）。ここは写し・手で直さない（試験が正と照らす）
   // >>> 部門の色 写しここから
   var DEPT_COL = { '青果': ['#ecf6ee', '#2f855a'], '精肉': ['#fbefe8', '#a8552e'], '水産': ['#e6f3f4', '#0e7c86'], '惣菜': ['#fdf2df', '#b7650b'], '日配': ['#f0edfa', '#6a4fb6'], '一般食品': ['#f3f2e0', '#77701d'], '菓子': ['#fbecf3', '#b03a74'], '日雑': ['#eef1f5', '#566377'] };
@@ -98,43 +132,231 @@
   // ── 描く
   var main = null;
   function render(how) {
-    fhReset(); PART = {}; LZF = {};
-    $$('#lens button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.lens === (S.view === 'status' ? 'home' : S.view))); });
-    $('#back').disabled = !HIST.length;
+    fhReset(); PART = {}; LZF = {}; fromSettle(); c3TipHide();
+    setBack();
     var h = '';
     if (S.view === 'home' || S.view === 'status') h = viewHome();
-    else if (S.view === 'guide') h = viewGuide();
     else if (S.view === 'admin') h = viewAdmin();
+    else if (S.view === 'guide') h = viewGuide();
     else h = viewLens(S.view);
-    main.innerHTML = hero() + h + foot();
+    main.innerHTML = h + (S.view === 'guide' ? '' : foot());
     pbar();
+    if (S.view === 'guide') gdAfter();
     var es = main.querySelector('.evstrip [aria-pressed="true"]');   // 催事の選び（1行の横送り）: 選んでいる催事が見える所まで送る
     if (es) { var ep = es.parentNode, dx = es.getBoundingClientRect().left - ep.getBoundingClientRect().left; if (dx < 0 || dx + es.offsetWidth > ep.clientWidth) ep.scrollLeft += dx - 12; }
+    sideNav();
     land(how);
     fhSchedule();
   }
-  function hero() {
-    return '<div class="hero"><label for="q1">' + (ME && ME.role === 'store' ? '困りごと・聞きたいことを入れてください' : '探す（困りごと・店・催事・ナレッジ）') + '</label>' +
-      '<div class="row"><input id="q1" type="search" autocomplete="off" placeholder="例: 売場が溢れる" aria-controls="r1"></div>' +
-      '<div class="chips">' + (ME && ME.role === 'store' ? ['売場が溢れる', 'ロスが多い', '予約が伸びない', '雨の日', '欠品'] : ['予約が伸びない', '見切り', '節分', '進捗', 'ぎゅうにゅう']).map(function (w) { return '<button type="button" data-q="' + esc(w) + '">' + esc(w) + '</button>'; }).join('') + '</div>' +
-      '<div class="res" id="r1" role="listbox"></div></div>';
+  /** 幅のある PC（1480〜）で、札と掘り下げを左・AI のコメントと次の一手を右に並べる包み（PO 11/17e「図と AI のコメントを左右に」）。細い画面では上から 札 → AI → 掘り下げ のまま */
+  function duo(tl, ai, dig) { return ai ? '<div class="duo"><div class="du-tl">' + tl + '</div><div class="du-ai">' + ai + '</div><div class="du-dig">' + dig + '</div></div>' : tl + dig; }
+  function setBack() { var d = !HIST.length; $$('[data-nav="back"]').forEach(function (b) { b.disabled = d; }); }
+  /** 探す欄（上の帯の中・11/17e PO「検索窓もわざわざ行を使わず、ヘッダに入れ込んでね」）: 空のまま押すと、困りごとの言葉の例を欄のすぐ下に */
+  function qExamples() {
+    var w = ME && ME.role === 'store' ? ['売場が溢れる', 'ロスが多い', '予約が伸びない', '雨の日', '欠品'] : ['予約が伸びない', '見切り', '節分', '進捗', 'ぎゅうにゅう'];
+    return '<div class="eg"><div class="lb">例（押すと探します）。ひらがな・カタカナ・ローマ字のどれでも当たります</div><div class="chips">' + w.map(function (x) { return '<button type="button" data-q="' + esc(x) + '">' + esc(x) + '</button>'; }).join('') + '</div></div>';
+  }
+
+  // ── 左のサイド（11/17e PO「ヘッダよりもサイドに目次や地図を設置しないと、今自分がどこにいるのか分かりづらい」）
+  //   画面の木（いまの画面に色の面と「いまここ」）・その下に、いまの画面の中の段（本文と連動して光る）。段の要素は持たず、id だけを持つ（描くたびに作り直す）
+  var SPY = { pin: '', raf: 0 };
+  function curScr() { var v = S.view; if (v === 'home' || v === 'status') return CUR ? 'home' : (ME && (ME.role === 'hq' || ME.role === 'admin') ? 'map' : 'home'); return v; }
+  function secLabel(el) {
+    if (el.matches('.ai')) return 'AI のコメント';
+    if (el.matches('details')) return 'くわしく';
+    if (el.matches('.tiles')) return '札';
+    var t = el.textContent, sm = el.querySelector('small'); if (sm) t = t.replace(sm.textContent, '');
+    t = t.split(' — ')[0].replace(/（.*$/, '').trim();
+    if (/の分析の結果$/.test(t)) return '分析の札';
+    return t.length > 18 ? t.slice(0, 17) + '…' : t;
+  }
+  function sideItems(v) {
+    var out = '', hq = ME && (ME.role === 'hq' || ME.role === 'admin'), n = 0, seenDet = false;
+    if (v === 'home' && hq) {
+      out += '<button type="button" class="si pl' + (CUR ? '' : ' cur') + '" data-view="home-map">全店のいま</button>';
+      if (CUR) out += '<button type="button" class="si pl cur" data-sx="lvtop">' + esc(storeName(CUR)) + 'のいま</button>';
+    }
+    if (v === 'guide') {
+      var g = -1;
+      // 段の位置は、見出しを包む箱（画面の外では中を描かない箱）で測る（見出しそのものを測ると、画面の外の中身まで並べ直させる＝開くのが遅くなる）
+      $$('.guide2 h2[id], .guide2 h3[id]', main).forEach(function (h) { if (h.tagName === 'H2') g++; var box = h.parentElement && h.parentElement.firstElementChild === h && h.parentElement.id ? h.parentElement : h; out += '<button type="button" class="si' + (h.tagName === 'H3' ? ' h3 fold' : '') + '" data-sx="' + esc(box.id) + '" data-g="' + g + '">' + esc(h.textContent) + '</button>'; });
+      return out;
+    }
+    var list = $$('h2.sec, .ai, h3.mh, details.det, .tiles', main).filter(function (el) {
+      if (el.closest('.drill,.yopen,.eopen,.mleaf,details:not(.det)')) return false;
+      if (el.matches('.tiles') && $('#ancards', main)) return false;
+      if (el.matches('.tiles') && el.previousElementSibling && el.previousElementSibling.matches('.tiles')) return false;
+      if (el.matches('details')) { if (seenDet || el.parentElement.closest('details')) return false; seenDet = true; }
+      return true;
+    }).slice(0, 14);
+    list.forEach(function (el) { if (!el.id) el.id = 'sx' + (++n); out += '<button type="button" class="si" data-sx="' + esc(el.id) + '">' + esc(secLabel(el)) + '</button>'; });
+    return out;
+  }
+  function sideNav() {
+    var v = S.view === 'status' ? 'home' : S.view;
+    $$('#side [data-lens]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.lens === v)); });
+    var ad = $('#side [data-lens="admin"]'); if (ad) ad.hidden = !(ME && ME.role === 'admin');
+    var gb = $('#guidebtn'); if (gb) gb.setAttribute('aria-pressed', String(v === 'guide'));
+    var items = sideItems(v);
+    $$('#side .sub').forEach(function (s) { var on = s.dataset.sub === v; s.classList.toggle('on', on); s.innerHTML = on ? items : ''; });
+    SPY.pin = ''; sideSpySoon();   // 光らせるのは次のコマで（描いた直後に位置を読んで、並べ直しを何度も起こさない）
+  }
+  /** 本文と連動して、いま読んでいる段を光らせる（いちばん下では、見えている最後の段） */
+  function sideSpy() {
+    var sub = $('#side .sub.on'); if (!sub) return;
+    var ls = $$('.si[data-sx]', sub); if (!ls.length) return;
+    var lim = stickyH() + 48, at = null, bottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
+    ls.forEach(function (l) { var e = document.getElementById(l.dataset.sx); if (!e) return; var t = e.getBoundingClientRect().top; if (t <= lim || (bottom && t < window.innerHeight)) at = l; });
+    if (SPY.pin) { var p = ls.filter(function (l) { return l.dataset.sx === SPY.pin; })[0]; if (p) at = p; }
+    if (!at) at = ls[0];
+    ls.forEach(function (l) { l.classList.toggle('on', l === at); });
+    if (S.view === 'guide') { var g = at.dataset.g; ls.forEach(function (l) { if (l.classList.contains('h3')) l.classList.toggle('fold', l.dataset.g !== g); }); }
+    var side = $('#side'), r = at.getBoundingClientRect(), s = side.getBoundingClientRect();
+    if (side.scrollHeight > side.clientHeight && (r.top < s.top + 20 || r.bottom > s.bottom - 10)) side.scrollTop += r.top - s.top - s.height / 3;
+  }
+  function sideSpySoon() { if (SPY.raf) return; SPY.raf = requestAnimationFrame(function () { SPY.raf = 0; sideSpy(); }); }
+  function sideGo(id) {
+    var el = document.getElementById(id); if (!el) return;
+    pushHist('scroll'); setBack(); SPY.pin = id;
+    glide(window.scrollY + el.getBoundingClientRect().top - stickyH() - 8);
+    el.classList.remove('landed'); void el.offsetWidth; el.classList.add('landed');
+    sideSpy();
+  }
+  function narrowNav() { return window.innerWidth <= 900; }
+  function sideOpen(on) { var s = $('#side'); s.classList.toggle('on', !!on); $('#menubtn').setAttribute('aria-expanded', String(!!on)); }
+
+  // ── 利用ガイド（11/17e）: 右上の「？ 利用ガイド」で、本文の画面として開く（サイドにガイドの節・本文と連動）。中身は窓口の Guide.html（ログインした役目の1節だけが届く）。
+  //   最初の画面のあと裏で1回受け取る（押したときの往復 0）。開く前の画面に「いまここ」・「この画面へ ▸」でその画面へ・来た所の札で元の画面へ
+  var GD = { html: null, p: null, cache: '', role: '', here: null };
+  function gdFetch() {
+    if (GD.html || GD.p || !ME) return GD.p;
+    GD.p = AUTH.call('statusGuide').then(function (r) {
+      GD.p = null;
+      if (r && r.ok && r.html) { GD.html = r.html; if (S.view === 'guide') render({ keep: true }); else gdWarmSoon(); }
+      else if (S.view === 'guide') { onFail(r); main.innerHTML = '<h1 class="vt" id="lvtop">店舗運営/MDの辞書利用ガイド</h1><div class="box"><p style="margin:0">利用ガイドを読み込めませんでした。左の「利用ガイド」を、もう一度押してください。</p></div>'; }
+    }, function () { GD.p = null; if (S.view === 'guide') { toast('通信できませんでした。'); main.innerHTML = '<h1 class="vt" id="lvtop">店舗運営/MDの辞書利用ガイド</h1><div class="box"><p style="margin:0">通信できませんでした。左の「利用ガイド」を、もう一度押してください。</p></div>'; } });
+    return GD.p;
+  }
+  /** 初めて開くときの字の並べ（はじめての字の形を作る・CPU 4倍で約1秒）を、手の空いたときに先に済ませる: 画面の地図の段だけを、画面の外で1回並べて捨てる */
+  function gdWarmSoon() { var f = function () { gdWarm(); }; if (window.requestIdleCallback) requestIdleCallback(f, { timeout: 5000 }); else setTimeout(f, 1500); }
+  function gdWarm() {
+    if (!GD.html || S.view === 'guide' || !main) return;
+    var src = document.createElement('div'); src.innerHTML = gdPrepared();
+    var mp = src.querySelector('#g-map'); if (!mp) return;
+    mp.removeAttribute('id'); $$('[id]', mp).forEach(function (x) { x.removeAttribute('id'); });   // 本物と同じ id を2つ置かない
+    var d = document.createElement('div'); d.className = 'guide2'; d.setAttribute('aria-hidden', 'true');
+    d.style.cssText = 'position:absolute;left:-99999px;top:0;visibility:hidden;pointer-events:none;width:' + main.clientWidth + 'px';
+    d.appendChild(mp); main.appendChild(d); void d.offsetHeight; d.remove();
+  }
+  /** ガイドの本文（1回だけ作って覚える）: 狭い画面のために、番号の説明を模式図のかたまりの中にも入れる（広い画面では隠れている） */
+  function gdPrepared() {
+    if (GD.cache) return GD.cache;
+    var d = document.createElement('div'); d.innerHTML = safeHtml(GD.html);
+    var sec = d.querySelector('section[data-role-nm]'); GD.role = sec ? sec.getAttribute('data-role-nm') : '';
+    $$('.scr', d).forEach(function (sc) {
+      var mk = $('.mock', sc), ol = $('ol.co', sc); if (!mk || !ol) return;
+      var lis = $$('li', ol); if (!lis.every(function (li) { return !!$('.mk-blk[data-n="' + li.getAttribute('data-n') + '"]', mk); })) return;
+      lis.forEach(function (li) { var b = $('.mk-blk[data-n="' + li.getAttribute('data-n') + '"] .mk-in', mk), c = document.createElement('span'); c.className = 'cap'; c.innerHTML = li.innerHTML; b.appendChild(c); });
+      sc.classList.add('capped');
+    });
+    GD.cache = d.innerHTML;
+    return GD.cache;
+  }
+  function viewGuide() {
+    if (!GD.html) { gdFetch(); return '<h1 class="vt" id="lvtop">店舗運営/MDの辞書利用ガイド</h1><div class="hint wait"><span class="spin" aria-hidden="true"></span>利用ガイドを読み込んでいます…</div>'; }
+    var body = gdPrepared();
+    return '<h1 class="vt" id="lvtop">店舗運営/MDの辞書利用ガイド' + (GD.role ? '<small>' + esc(GD.role) + '</small>' : '') + '</h1><div class="guide2">' + body + '</div>';
+  }
+  /** ガイドを描いたあと: 画面の地図の「いまここ」（ガイドを開く前の画面）・狭い画面ではつながりの箱を閉じる・いまここの見つけ方の最初の例 */
+  function gdAfter() {
+    var root = $('#smap', main); if (!root) return;
+    var h = GD.here || { scr: 'home', nm: '' };
+    $$('.here', root).forEach(function (x) { x.classList.remove('here'); });
+    var all = $$('.sbox[data-scr="' + h.scr + '"]', root), b = root.classList.contains('open') ? all[0] : all.filter(function (x) { return !x.closest('.steps'); })[0];   // 位置を読まずに決める（段をたたんでいるときは、段の中の箱は見えない）
+    if (!b && all[0] && all[0].closest('.scol')) b = $('.sbox.head', all[0].closest('.scol'));
+    if (!b) b = $('.sbox.head[data-scr="' + (h.scr === 'map' ? 'home' : h.scr) + '"]', root);
+    if (b) b.classList.add('here');
+    var nm = $('#gnow', main); if (nm) nm.textContent = h.nm || '―';
+    if (window.innerWidth <= 760) $$('details.conn', main).forEach(function (x) { x.open = false; });
+    var first = $('.hx', main); if (first) gdSetHere(first);
+  }
+  function openGuide() {
+    if (S.view === 'guide') { if (S.from && FROMS[S.from]) fromBack(); return; }   // ガイドの中でもう一度押すと、来た所へ
+    GD.here = { scr: curScr(), nm: placeName() };
+    go({ view: 'guide' }, { top: true });   // 来た所の札（← 〇〇に戻る）が出る
+  }
+  function gdSetHere(btn) {
+    $$('.hx', main).forEach(function (x) { x.setAttribute('aria-pressed', String(x === btn)); });
+    var m = $('#hmock', main); if (!m) return;
+    var tab = btn.getAttribute('data-tab'), ch = btn.getAttribute('data-chip');
+    $$('.ms', m).forEach(function (t) { t.classList.toggle('on', t.textContent === tab); });
+    $('.mk-crumb', m).textContent = btn.getAttribute('data-crumb');
+    var cb = $('.mk-chipb', m); if (cb) { cb.textContent = ch ? '← ' + ch + 'に戻る' : ''; cb.hidden = !ch; }
+    var h1 = $('#hm-h1', m); h1.textContent = btn.getAttribute('data-h1') + ' '; var sm = document.createElement('small'); sm.textContent = btn.getAttribute('data-h1s'); h1.appendChild(sm);
+    var mp = $('#hm-map', main); if (mp) mp.textContent = btn.getAttribute('data-mapnm');
+  }
+  /** ガイドの中を押した: 地図の箱・見たいこと・リンク＝ガイドの中で移る（光らせる）／「この画面へ ▸」＝その画面へ */
+  function gdClick(e) {
+    var t = e.target, op = t.closest('[data-open]');
+    if (op) { e.preventDefault(); gdOpenScreen(op.getAttribute('data-open')); return true; }
+    var more = t.closest('.sm-more');
+    if (more) { var root = more.closest('.smap'), o = !root.classList.contains('open'); root.classList.toggle('open', o); more.setAttribute('aria-expanded', String(o)); more.textContent = o ? '画面の中の段をたたむ ▴' : '画面の中の段も見る ▾'; gdAfter(); return true; }
+    var hx = t.closest('.hx'); if (hx) { gdSetHere(hx); return true; }
+    var a = t.closest('[data-go]');
+    if (a) { e.preventDefault(); gdGo(a.getAttribute('data-go'), a.getAttribute('data-co')); return true; }
+    return false;
+  }
+  function gdGo(id, co) {
+    var el = document.getElementById(id); if (!el || !el.getClientRects().length) { toast('その説明は、このガイドにはありません'); return; }
+    var tgt = el, off = 10;
+    if (co) { var b = $$('.mk-blk[data-n="' + co + '"]', el).filter(function (x) { return x.getClientRects().length; })[0] || $$('ol.co li[data-n="' + co + '"]', el).filter(function (x) { return x.getClientRects().length; })[0]; if (b) { tgt = b; off = Math.min(140, window.innerHeight * 0.2); } }
+    pushHist('scroll'); setBack();
+    var hh = el.matches('h2,h3') ? el : el.querySelector('h2,h3'); SPY.pin = hh && hh.id ? hh.id : '';
+    glide(window.scrollY + tgt.getBoundingClientRect().top - stickyH() - off);
+    setTimeout(function () {
+      if (co) $$('.mk-blk[data-n="' + co + '"],ol.co li[data-n="' + co + '"]', el).filter(function (x) { return x.getClientRects().length; }).forEach(function (x) { x.classList.remove('pulse'); void x.offsetWidth; x.classList.add('pulse'); });
+      else { var f = el.closest('.scrsec') || el; f.classList.remove('landed'); void f.offsetWidth; f.classList.add('landed'); }
+    }, 300);
+    sideSpy();
+  }
+  function gdOpenScreen(s) {
+    var nm = { home: 'いまの様子', map: '全店のいま', month: '今月の型', event: '催事ごと', year: '年間の流れ', dept: '部門ごと', wx: '天気と売れ方', admin: '更新の状態' }[s];
+    if (!nm) return;
+    if (s === 'map') { pushHist('tab'); useStore(''); S.view = 'home'; S.path = ['S']; S.open = []; render({ top: true }); }
+    else if (s === 'home') go({ view: 'home', path: ['S'] }, { top: true, nav: 'tab' });
+    else go({ view: s }, { top: true, nav: 'tab' });
+    toast('「' + nm + '」を開きました');
   }
   function foot() {
     var m = (TREE || SUM) && meta();
     return '<div class="foot">' + (m && m.per ? '数は ' + esc(m.per.sales[0]) + '〜' + esc(m.per.sales[1]) + '（前年比は直近4週 ' + esc(m.per.yoy[0]) + '〜' + esc(m.per.yoy[1]) + '）' : '') + (ME ? '｜' + esc(ME.email) + '（' + esc(roleLabel()) + '）' : '') + '</div>';
   }
-  /** ほかの画面への入口（上の帯の「ほかの画面」）。分析レポートと動画は本部・管理者だけに出す（見られる範囲は、それぞれの窓口が呼び出しのたびに決める） */
+  /** 別のページへ出る印（11/17e PO 問4 A: 別のページは新しいタブで開く。日本語の書体に「↗」が無い端末があるので、その場の絵で） */
+  var EXT = '<svg class="ext" viewBox="0 0 12 12" aria-label="新しいタブで開きます" role="img"><path d="M5 2h5v5M10 2L3.5 8.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M8 8.5V10H2V4h1.5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>';
+  function extA(href, inner, cls) { return '<a' + (cls ? ' class="' + cls + '"' : '') + ' href="' + href + '" target="_blank" rel="noopener" title="新しいタブで開きます（この画面はそのまま）">' + inner + EXT + '</a>'; }
+  /** ほかの画面への入口（上の帯の「ほかの画面」）。分析レポートと動画は本部・管理者だけに出す（見られる範囲は、それぞれの窓口が呼び出しのたびに決める）。新しいタブで開く */
   function appLinks() {
     var hq = ME && (ME.role === 'hq' || ME.role === 'admin');
     var L = (hq ? [['reports/', '分析レポート', '結果票・売れ方ロス天気（本部だけ）'], ['video/', 'AI教材の動画', '学ぶ（本部のドメイン）']] : []).concat([['classic/', '前の辞書の画面', '話題の棚・教える・テーマ索引・天気の根拠の図']]);
-    return L.map(function (x) { return '<a role="menuitem" href="' + x[0] + '">' + esc(x[1]) + ' ▸<small>' + esc(x[2]) + '</small></a>'; }).join('');
+    return L.map(function (x) { return '<a href="' + x[0] + '" target="_blank" rel="noopener" title="' + esc(x[1]) + '（新しいタブで開きます・この画面はそのまま）">' + esc(x[1]) + EXT + '<small>' + esc(x[2]) + '</small></a>'; }).join('');
   }
   function roleLabel() { return ME.role === 'store' ? '店・' + (ME.label || '') : ME.role === 'hq' ? '本部' : ME.role === 'admin' ? '管理者' : '役目なし'; }
+  /** 来た所の札（その下の帯の左）。字は「← 部門ごと（惣菜）に戻る」。スマホでは（ ）の中を隠す */
+  function fromChip() {
+    var f = S.from && FROMS[S.from], w = $('#fromwrap'); if (!w) return;
+    var nm = f ? f.nm : '';
+    if (w.dataset.nm === nm) return;   // 同じ札なら作り直さない
+    w.dataset.nm = nm;
+    if (!f) { w.innerHTML = ''; return; }
+    var i = nm.indexOf('（'), base = i > 0 ? nm.slice(0, i) : nm, det = i > 0 ? nm.slice(i) : '';
+    w.innerHTML = '<button type="button" id="fromchip" title="来た所（' + esc(nm) + '）の、見ていた位置へ戻ります"><span aria-hidden="true">←&nbsp;</span><span>' + esc(base) + '</span><span class="fd">' + esc(det) + '</span><span>に戻る</span></button>';
+  }
   function pbar() {
     var c = $('#crumb'), m = $('#metric'), up = $('#upbtn');
-    var hqPre = ME && (ME.role === 'hq' || ME.role === 'admin') ? '<button type="button" data-view="home-map">全体の地図</button>' + (CUR ? '<span class="sep">›</span>' : '') : '';
+    fromChip();
+    var hqPre = ME && (ME.role === 'hq' || ME.role === 'admin') ? '<button type="button" data-view="home-map">全店のいま</button>' + (CUR ? '<span class="sep">›</span>' : '') : '';
     if ((S.view === 'home' || S.view === 'status') && !CUR && hqPre) {
-      c.innerHTML = '<span class="cur">全体の地図</span>'; up.style.visibility = 'hidden'; m.style.display = '';
+      c.innerHTML = '<span class="cur">全店のいま</span>'; up.style.visibility = 'hidden'; m.style.display = '';
       m.innerHTML = '<span class="lb">見る数</span>' + ['a', 'q', 'c', 'u'].map(function (k) { return '<button type="button" data-m="' + k + '" aria-pressed="' + (S.m === k) + '">' + MK[k].nm + '</button>'; }).join('');
       return;
     }
@@ -144,7 +366,7 @@
       m.style.display = AN_M[S.an] ? '' : 'none';   // 見る数（売上・販売数・来客数・単価）で替わる分析だけに出す
       m.innerHTML = '<span class="lb">見る数</span>' + ['a', 'q', 'c', 'u'].map(function (k) { return '<button type="button" data-m="' + k + '" aria-pressed="' + (S.m === k) + '">' + MK[k].nm + '</button>'; }).join('');
     } else {
-      c.innerHTML = '<span class="cur">' + esc({ home: 'いまの様子', guide: '店舗運営/MDの辞書利用ガイド', admin: '更新の状態', month: '今月の型', event: '催事ごと', year: '年間の流れ', dept: '部門ごと', wx: '天気と売れ方' }[S.view] || '') + '</span>';
+      c.innerHTML = '<span class="cur">' + esc({ home: 'いまの様子', admin: '更新の状態', guide: '店舗運営/MDの辞書利用ガイド', month: '今月の型', event: '催事ごと', year: '年間の流れ', dept: '部門ごと', wx: '天気と売れ方' }[S.view] || '') + '</span>';
       up.style.visibility = 'hidden'; m.style.display = 'none';
     }
   }
@@ -309,31 +531,30 @@
   }
   function viewMap() {
     var M = ME.map, m = S.m;
-    if (!M) return '<h1 class="vt" id="lvtop">全体の地図<small>' + esc(roleLabel()) + '</small></h1><div class="box"><p style="margin:0">' + esc(ME.note || '全体の地図は、いま準備中です。') + '</p></div>' + (ME.role === 'admin' ? '<div class="nx"><button type="button" data-view="admin">更新の状態を見る ▸</button></div>' : '');
+    if (!M) return '<h1 class="vt" id="lvtop">全店のいま<small>' + esc(roleLabel()) + '</small></h1><div class="box"><p style="margin:0">' + esc(String(ME.note || '全店の数は、いま準備中です。').replace('全体の地図', '全店の数')) + '</p></div>' + (ME.role === 'admin' ? '<div class="nx"><button type="button" data-view="admin">更新の状態を見る ▸</button></div>' : '');
     var d = mapDep(M), dn = d ? (mapDl(M).filter(function (x) { return x.id === d; })[0] || {}).n || '' : '', lvn = { lv: d ? 1 : 0 }, an = S.an;
     var mn = function (k) { return mname(k, lvn); };
     var stores = []; M.areas.forEach(function (a) { a.stores.forEach(function (s) { stores.push(s); }); });
     var has = stores.filter(function (s) { return !!mapPick(s, d); });
-    var h = '<h1 class="vt" id="lvtop">全体の地図<small>全社 → エリア → 店｜' + stores.length + '店' + (dn ? '｜見る範囲: ' + esc(dn) : '') + (M.note ? '｜' + esc(M.note) : '') + '</small></h1>';
+    var h = '<h1 class="vt" id="lvtop">全店のいま<small>全社 → エリア → 店｜' + stores.length + '店' + (dn ? '｜見る範囲: ' + esc(dn) : '') + (M.note ? '｜' + esc(M.note) : '') + '</small></h1>';
     h += '<div class="ctl">' + mapDeptBar(M, d) +
       (AN_M[an] ? '<div class="msel" role="group" aria-label="見る数"><span class="lb">見る数</span>' + ['a', 'q', 'c', 'u'].map(function (k) { return '<button type="button" data-m="' + k + '" aria-pressed="' + (m === k) + '">' + esc(mn(k)) + '</button>'; }).join('') +
         '<span class="hint" style="margin:0">札・AI のコメント・比べる図が、' + (dn ? esc(dn) + 'の' : '') + 'この数に替わります</span></div>' : '<div class="msel"><span class="lb">見る数</span><span class="hint" style="margin:0">「' + esc(AN[an]) + '」は、決まった数で見ます</span></div>') + '</div>';
     // 1. 全社の分析の札（店のステータスと同じ6つ）
-    h += '<h2 class="sec" id="ancards">' + esc('全社' + (dn ? 'の' + dn : '')) + 'の分析の結果<small>札を押すと、下の AI のコメントと比べる図が、その分析に替わります</small></h2><div class="tiles an6">' + mapTiles(M, d, m, mn, stores, has).map(tile).join('') + '</div>' +
+    var tl0 = '<h2 class="sec" id="ancards">' + esc('全社' + (dn ? 'の' + dn : '')) + 'の分析の結果<small>札を押すと、下の AI のコメントと比べる図が、その分析に替わります</small></h2><div class="tiles an6">' + mapTiles(M, d, m, mn, stores, has).map(tile).join('') + '</div>' +
       '<div class="hint">青＝多い・赤＝少ない（「+」「−」も付けています）｜「店の中央」＝店を並べた真ん中の店の値（ほかの店と比べない店は入れない）</div>';
-    if (ME.role === 'admin') h += '<div class="adm"><h3>更新の状態（管理者だけ）</h3><p style="margin:0">中身の年月 ' + esc(M.ym) + '・店 ' + stores.length + '｜<button type="button" class="hbtn" data-view="admin">ファイルと名簿の数を見る ▸</button></p></div>';
+    if (ME.role === 'admin') tl0 += '<div class="adm"><h3>更新の状態（管理者だけ）</h3><p style="margin:0">中身の年月 ' + esc(M.ym) + '・店 ' + stores.length + '｜<button type="button" class="hbtn" data-view="admin">ファイルと名簿の数を見る ▸</button></p></div>';
     // 2. 店ごとの値（比べる図・AI のコメントの元）
     var rows = stores.map(function (s) { var x = mapPick(s, d); return { s: s, x: x, v: mapLens(x, an, m) }; });
-    var cmp = mapCompare(M, d, dn, m, mn, stores, rows);
-    h += cmp.top;
+    var cmp = mapCompare(M, d, dn, m, mn, stores, rows), ai0 = '';
     var t = mapText(M, d, dn, m, mn, stores, rows);
     if (t) {
-      h += '<div class="ai"><div class="hd">AI のコメント（' + esc(AN[an]) + (dn ? '・' + esc(dn) : '') + '）</div><dl><dt>結果</dt><dd>' + esc(t.r) + '</dd><dt>なぜ</dt><dd>' + esc(t.y) + '</dd><dt>すること</dt><dd>' + esc(t.s) + '</dd></dl></div>';
-      if (t.w) { var wx2 = t.w.x, sd = d ? (wx2 && wx2.same) || d : ''; h += '<div class="nx"><b>次の一手</b>: <button type="button" data-store="' + esc(t.w.s.c) + '"' + (sd ? ' data-sdep="' + esc(sd) + '"' : '') + '>' + esc(t.w.s.nm + (dn ? 'の' + dn : '') + 'を開いて、' + AN[an] + 'を' + (dn ? '中分類' : '部門') + 'ごとに見る') + ' ▸</button></div>'; }
+      ai0 += '<div class="ai"><div class="hd">AI のコメント（' + esc(AN[an]) + (dn ? '・' + esc(dn) : '') + '）</div><dl><dt>結果</dt><dd>' + esc(t.r) + '</dd><dt>なぜ</dt><dd>' + esc(t.y) + '</dd><dt>すること</dt><dd>' + esc(t.s) + '</dd></dl></div>';
+      if (t.w) { var wx2 = t.w.x, sd = d ? (wx2 && wx2.same) || d : ''; ai0 += '<div class="nx"><b>次の一手</b>: <button type="button" data-store="' + esc(t.w.s.c) + '"' + (sd ? ' data-sdep="' + esc(sd) + '"' : '') + '>' + esc(t.w.s.nm + (dn ? 'の' + dn : '') + 'を開いて、' + AN[an] + 'を' + (dn ? '中分類' : '部門') + 'ごとに見る') + ' ▸</button></div>'; }
     }
     // 3. 店の比較（エリアごと）。店 → 部門 → 中分類 → クラスをその場で開く（行を押すと、この塊だけを描き直す）
     var low0 = cmp.low;
-    h += blk('blk-mcmp', function () { if (low0 !== null) { var x = low0; low0 = null; return x; } return mapCompare(M, d, dn, m, mn, stores, rows).low; });
+    h += duo(tl0 + cmp.top, ai0, blk('blk-mcmp', function () { if (low0 !== null) { var x = low0; low0 = null; return x; } return mapCompare(M, d, dn, m, mn, stores, rows).low; }));
     // 4. エリアごとの店の札（前の形・たたむ）と、店の一覧の表
     var cards = '<div class="mlg"><span>店の札の色＝' + esc((dn ? dn + 'の' : '') + mn(m)) + 'の前年からの増減:</span><span><i style="background:#1d5fbf"></i>+3% より多い</span><span><i style="background:#7aa7e3"></i>0〜+3%</span><span><i style="background:#eba59c"></i>0〜−3%</span><span><i style="background:#c0392b"></i>−3% より少ない</span></div><div class="areas">';
     M.areas.forEach(function (a) {
@@ -452,8 +673,8 @@
   function viewNode(n) {
     var st = meta().st, h = '', hq = ME.role === 'hq' || ME.role === 'admin';
     h += '<h1 class="vt" id="lvtop">' + esc(n.lv === 0 ? n.n + 'のいま' : n.n) + '<small>' + esc(LVNM[n.lv]) + '｜' + esc(st.ar || '') + '・' + esc(st.ty || '') + (n.lv ? '｜' + esc(st.nm) : '') + '</small>' +
-      (hq && n.lv === 0 ? '<button type="button" class="hbtn" data-view="home-map" style="margin-left:auto">← 全体の地図へ</button>' : '') + '</h1>';
-    h += '<div class="ctl">' + deptBar() + metricBar(n) + '</div>' + tiles(n) + (S.an === 'yo' ? aiBox(n) : anBox(n)) + blk('blk-dig', function () { return drill(n); }) + anFig(n) + details(n);
+      (hq && n.lv === 0 ? '<button type="button" class="hbtn" data-view="home-map" style="margin-left:auto">← 全店のいまへ</button>' : '') + '</h1>';
+    h += '<div class="ctl">' + deptBar() + metricBar(n) + '</div>' + duo(tiles(n), S.an === 'yo' ? aiBox(n) : anBox(n), blk('blk-dig', function () { return drill(n); })) + anFig(n) + details(n);
     return h;
   }
   /** 見る数（PO 11/16「売上／客数／販売数／客単価のいずれが指標か・案内が弱い」）: 見る範囲のすぐ下に置く。札・AI のコメント・掘り下げ・図の数が替わる（右上の帯の「見る数」と同じ） */
@@ -594,7 +815,7 @@
     else body = LAZY[{ ad: 'ad', md: 'md', ls: 'loss' }[S.an]](n);
     var hq = ME && (ME.role === 'hq' || ME.role === 'admin'), rep = { wx: 'WEATHER/w-s4', ls: 'WEATHER/l-s0', tm: 'WEATHER/u-s1n', ad: 'ADMD', md: 'ADMD' }[S.an];
     return '<h2 class="sec" id="anfig">' + esc(n.n) + 'の' + esc(AN[S.an]) + ' — この段の図</h2><div class="box">' + body +
-      (hq && rep ? '<p class="hint"><a href="reports/#/' + rep + '">全店の図とグラフは、分析レポートで見られます（本部だけ）▸</a></p>' : '') + '</div>';
+      (hq && rep ? '<p class="hint">' + extA('reports/#/' + rep, '全店の図とグラフは、分析レポートで見られます（本部だけ・新しいタブ）') + '</p>' : '') + '</div>';
   }
   function aiBox(n) {
     var a = n.ai && n.ai[S.m]; if (!a) return '';
@@ -824,12 +1045,13 @@
     var lab = '', every = nar ? 3 : (J > 9 ? 2 : 1);
     for (var q3 = 0; q3 < J; q3++) { if (q3 % every && q3 !== J - 1) continue; var t = T(P(q3 - cx0, fy0 + 0.3, 0)); lab += '<text x="' + t[0] + '" y="' + (+t[1] + fz) + '" font-size="' + fz.toFixed(1) + '" text-anchor="middle" fill="#334155">' + hrs[j0 + q3] + '時</text>'; }
     bars.forEach(function (bb) {
-      var x0 = bb.gx - wx, x1 = bb.gx + wx, y0 = bb.gy - wy, y1 = bb.gy + wy, z = bb.z, we = bb.k >= 5, hu = we ? 28 : 214, sa = we ? 80 : 60, L = we ? 56 : 58;
-      var col = function (l, al) { return 'hsla(' + hu + ',' + sa + '%,' + l + '%,' + al + ')'; };
-      out += '<g><title>' + esc(dayNm(bb.k) + ' ' + hrs[bb.j] + '時 ' + num(bb.v, 1) + o.u + (bb.pk ? '（この曜日でいちばん多い時刻）' : '')) + '</title>' +
+      // 色の濃さ＝高さ（PO 11/17「高さでヒートマップのように濃淡」）: 物差しは図の中の全部の棒で1つ（max）。低い＝薄い・高い＝濃い。色の向きは平日＝青・土日と祝日＝橙のまま
+      var x0 = bb.gx - wx, x1 = bb.gx + wx, y0 = bb.gy - wy, y1 = bb.gy + wy, z = bb.z, we = bb.k >= 5, hu = we ? 28 : 214, sa = we ? 82 : 64, L = c3Light(bb.v / max);
+      var col = function (l, al) { return 'hsla(' + hu + ',' + sa + '%,' + Math.max(18, Math.min(94, l)) + '%,' + al + ')'; };
+      out += '<g data-k="' + bb.k + '" data-j="' + bb.j + '">' +
         poly([P(x0, y0, 0), P(x1, y0, 0), P(x1, y0, z), P(x0, y0, z)], col(L, 0.86)) +
         (s < 0 ? poly([P(x1, y0, 0), P(x1, y1, 0), P(x1, y1, z), P(x1, y0, z)], col(L - 14, 0.86)) : poly([P(x0, y0, 0), P(x0, y1, 0), P(x0, y1, z), P(x0, y0, z)], col(L - 14, 0.86))) +
-        poly([P(x0, y0, z), P(x1, y0, z), P(x1, y1, z), P(x0, y1, z)], col(L + 16, 0.95), bb.pk ? ' stroke="#0b2f66" stroke-width="2"' : null) + '</g>';
+        poly([P(x0, y0, z), P(x1, y0, z), P(x1, y1, z), P(x0, y1, z)], col(L + 12, 0.97), bb.pk ? ' stroke="#0b2f66" stroke-width="2"' : null) + '</g>';
     });
     if (top) { var tt = T(P(top.gx, top.gy, top.z + 0.12)); lab += '<text x="' + tt[0] + '" y="' + tt[1] + '" font-size="' + fz.toFixed(1) + '" font-weight="800" text-anchor="middle" fill="#0b2f66" paint-order="stroke" stroke="#fff" stroke-width="4">' + esc(num(top.v, 1)) + '</text>'; }
     rows.forEach(function (r) {
@@ -838,6 +1060,38 @@
         (nar ? '' : ' 計 ' + esc(num(r.tot, 1))) + (r.pk >= 0 ? (nar ? ' ' : '・峰 ') + hrs[r.pk] + '時' : '') + '</text>';
     });
     return '<svg viewBox="0 0 ' + W + ' ' + HH + '" width="100%" role="img" aria-label="曜日と時間帯ごとの' + esc(o.nm) + 'の立体の棒（数は下の「表で見る」）">' + out + lab + '</svg>';
+  }
+  /** 高さ（0〜1）→ 明るさ（低い＝薄い 84%・高い＝濃い 36%）。いちばん薄い段でも床（明るさ 97%）と見分けられる */
+  function c3Light(t) { t = Math.max(0, Math.min(1, t || 0)); return 84 - 48 * Math.pow(t, 0.85); }
+  /** 色の濃さの見本（図のすぐ上の凡例） */
+  function c3Legend() {
+    var sw = function (hu, sa) { return [0, 0.33, 0.66, 1].map(function (t) { return '<i style="background:hsl(' + hu + ',' + sa + '%,' + (c3Light(t) + 6).toFixed(0) + '%)"></i>'; }).join(''); };
+    return '<div class="c3lg"><span>棒の色の濃さ＝' + esc((C3.d && C3.d.nm) || '売上') + 'の高さ（薄い＝少ない・濃い＝多い）</span><span class="sw">平日 ' + sw(214, 64) + '</span><span class="sw">土日・祝 ' + sw(28, 82) + '</span><span><i class="pk"></i>濃い縁＝その曜日の峰</span></div>';
+  }
+  /** 棒に合わせたときの札（PO 11/17「各柱をホバーした時に、データが出ると…透過カードで」）: 図の数から出せる物だけ。札は1つを使い回す（受け口は document に1つ） */
+  var C3TIP = { el: null, g: null, raf: 0, ev: null };
+  function c3TipText(k, j) {
+    var o = C3.d; if (!o || !o.H || !o.H[k]) return '';
+    var H = o.H, v = H[k][j]; if (!isFinite(v)) return '';
+    var row = H[k].filter(isFinite).slice().sort(function (a, b) { return b - a; }), rk = row.indexOf(v) + 1;
+    var oth = H.filter(function (r, i) { return i !== k && isFinite(r[j]); }).map(function (r) { return r[j]; }), av = oth.length ? oth.reduce(function (a, b) { return a + b; }, 0) / oth.length : NaN;
+    var tot = H[k].reduce(function (a, b) { return a + (isFinite(b) ? b : 0); }, 0);
+    var li = function (a, b) { return '<span>' + esc(a) + '</span><em>' + esc(b) + '</em>'; };
+    return '<b>' + esc(dayNm(k) + ' ' + o.hrs[j] + '時') + '</b>' + li(o.nm + '（1日あたり）', num(v, 1) + ' ' + o.u) +
+      li(dayNm(k) + 'の中で', rk === 1 ? '1番目（峰）' : rk + '番目（' + row.length + '時間のうち）') +
+      (isFinite(av) && av > 0 ? li('ほかの曜日の' + o.hrs[j] + '時の平均', num(av, 1) + ' ' + o.u + '（' + num(v / av, 2) + '倍）') : '') +
+      (tot > 0 ? li(dayNm(k) + 'の1日の計に占める', num(v / tot * 100, 1) + '%') : '');
+  }
+  function c3TipHide() { if (C3TIP.g) { C3TIP.g.classList.remove('hot'); C3TIP.g = null; } if (C3TIP.el) C3TIP.el.style.display = 'none'; }
+  function c3TipShow(g, x, y) {
+    if (!C3TIP.el) { C3TIP.el = document.createElement('div'); C3TIP.el.className = 'c3tip'; C3TIP.el.setAttribute('aria-hidden', 'true'); document.body.appendChild(C3TIP.el); }
+    var t = C3TIP.el;
+    if (C3TIP.g !== g) { if (C3TIP.g) C3TIP.g.classList.remove('hot'); C3TIP.g = g; g.classList.add('hot'); t.innerHTML = c3TipText(+g.getAttribute('data-k'), +g.getAttribute('data-j')); }
+    if (!t.innerHTML) { c3TipHide(); return; }
+    t.style.display = 'grid';
+    var w = t.offsetWidth, h = t.offsetHeight, vw = document.documentElement.clientWidth, vh = window.innerHeight;
+    var lx = x + 16 + w > vw - 6 ? x - 16 - w : x + 16, ly = y + 16 + h > vh - 6 ? y - 16 - h : y + 16;   // 右・下の端では反対側に
+    t.style.left = Math.max(6, lx) + 'px'; t.style.top = Math.max(6, ly) + 'px';
   }
   /** 図の上の結論の一文（認知の決まり9）: 平日と土日の峰の時刻・いちばん多い所 */
   function c3Lead() {
@@ -849,7 +1103,7 @@
     var wd = rng([0, 1, 2, 3, 4]), we = rng([5, 6]);
     return '<p class="c3k">' + (wd ? '平日の峰は <b>' + wd + '</b>' : '') + (we ? '、土日の峰は <b>' + we + '</b>' : '') + '。いちばん多いのは <b>' + dayNm(top.k) + 'の ' + hrs[top.j] + '時</b>（' + esc(num(top.v, 1) + o.u) + '）。</p>';
   }
-  function c3Redraw() { $$('.c3s').forEach(function (e) { e.innerHTML = c3Svg(); }); }
+  function c3Redraw() { c3TipHide(); $$('.c3s').forEach(function (e) { e.innerHTML = c3Svg(); }); }
   function bars(vals, labs, o) {   // 縦の棒（同じ目盛り・0 か基準の線から）。o: { base, fmt, mark〈比べる相手の値の並び〉, markName・barName〈図の上の凡例〉, unit }
     var hasMk = !!(o.mark && o.mark.some(isFinite));
     var lgd = hasMk && o.markName ? '<div class="blg"><span><i class="sb" aria-hidden="true"></i>棒＝' + esc(o.barName || 'この段') + '</span><span><i class="sd" aria-hidden="true"></i>点線＝' + esc(o.markName) + '</span></div>' : '';
@@ -883,13 +1137,13 @@
       if (!H) return '<p class="hint">この段には、時間帯の数がありません。</p>';
       var hrs = meta().hrs || [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21], div = m === 'a' ? 1000 : 1, u = m === 'a' ? '千円' : m === 'q' ? '点' : '人';
       C3.d = { H: H.map(function (r) { return r.map(function (v) { return v / div; }); }), hrs: hrs, u: u, nm: mname(m, n) };   // 立体の棒の元（回すときに描き直す）
-      var chart = '<div class="c3"><div class="c3b" role="group" aria-label="図の向き"><button type="button" data-c3rot="-15">↺ 左へ回す</button><button type="button" data-c3rot="0">はじめの向き</button><button type="button" data-c3rot="15">右へ回す ↻</button><span class="hint c3h-pc" style="margin:0">マウスで図を左右に引いても回せます。棒にマウスを置くと数が出ます（数は下の「表で見る」にも）</span><span class="hint c3h-sp" style="margin:0">図は指で横に送れます。数は下の「表で見る」で</span></div><div class="c3s">' + c3Svg() + '</div></div>';
+      var chart = '<div class="c3"><div class="c3b" role="group" aria-label="図の向き"><button type="button" data-c3rot="-15">↺ 左へ回す</button><button type="button" data-c3rot="0">はじめの向き</button><button type="button" data-c3rot="15">右へ回す ↻</button><span class="hint c3h-pc" style="margin:0">マウスで図を左右に引いても回せます。棒にマウスを置くと数の札が出ます（数は下の「表で見る」にも）</span><span class="hint c3h-sp" style="margin:0">図は指で横に送れます。棒を押すと数の札が出ます</span></div>' + c3Legend() + '<div class="c3s">' + c3Svg() + '</div></div>';
       var rows = H.map(function (r, i) {   // 数だけの表（色の濃さはやめた・PO 11/16 夜）。太字＝その曜日の峰・右に1日の計
         var pk = r.indexOf(Math.max.apply(null, r)), tot = r.reduce(function (a, v) { return a + (isFinite(v) ? v : 0); }, 0);
         return '<tr><td>' + DOW8[i] + '</td>' + r.map(function (v, j) { return '<td class="n"' + (j === pk ? ' style="font-weight:800"' : '') + '>' + num(v / div, m === 'a' ? 1 : 0) + '</td>'; }).join('') + '<td class="n"><b>' + num(tot / div, m === 'a' ? 1 : 0) + '</b></td></tr>';
       }).join('');
       return (S.m === 'u' ? '<p class="hint">単価は時間帯の数がないので、売上で見せています。</p>' : '') + figt('曜日 × 時間帯の' + mname(m, n) + '（1日あたり・' + u + '）') + c3Lead() + chart +
-        '<p class="hint">棒の高さ＝その曜日・その時刻の' + esc(mname(m, n)) + '（どの棒も同じ目盛り・数のあるのは、いちばん高い棒）。手前から 月→日・祝。青＝平日・橙＝土日と祝日。縁の濃い棒＝その曜日でいちばん多い時刻（峰）で、行の端に「計」と「峰」を数で出しています。峰の前に主力を並べ、峰のあとは作る量を絞る。</p>' +
+        '<p class="hint">棒の高さ＝その曜日・その時刻の' + esc(mname(m, n)) + '（どの棒も同じ目盛り・数のあるのは、いちばん高い棒）。手前から 月→日・祝。青＝平日・橙＝土日と祝日（棒の色の濃さ＝高さ）。縁の濃い棒＝その曜日でいちばん多い時刻（峰）で、行の端に「計」と「峰」を数で出しています。峰の前に主力を並べ、峰のあとは作る量を絞る。</p>' +
         '<details class="det"><summary>表で見る（数・太字＝その曜日の峰）</summary><div>' + table(['曜日'].concat(hrs.map(function (x) { return x + '時'; })).concat(['1日の計']), rows, false) + '</div></details>';
     },
     wx: function (n) {
@@ -1098,15 +1352,16 @@
       if (ds.length > 1) tl.push({ nm: '伸びた部門・落ちた部門', v: esc(ds[0].x.n.n) + ' <small>' + num(ds[0].i.v, 2) + '倍</small>', vc: 'tx', sub2: '落ちた: ' + ds[ds.length - 1].x.n.n + ' ' + num(ds[ds.length - 1].i.v, 2) + '倍（部門の指数）' });
     } else if (st && !TREE) tl.push({ nm: '自店の去年の' + mo + '月', v: '<span class="spin" aria-hidden="true"></span>', sub: '自店の数を読み込んでいます…' });
     if (tl.length < 4) tl.push({ nm: '判断カード', u: '枚', v: mcs.length + '<small>枚</small>', sub: 'この月に「いつ」がかかるカード' });
-    h += '<div class="tiles t4 mtiles">' + tl.map(tile).join('') + '</div>';
-    if (!st) h += '<div class="hint">' + (ME && (ME.role === 'hq' || ME.role === 'admin') ? '全体の地図で店を開くと、その店の「去年のこの月」の数と掘り下げが、ここに出ます（いまは辞書の部分だけ）。' : 'このアカウントには店が結ばれていないので、辞書の部分だけを出しています。') + '</div>';
+    var mTl = '<div class="tiles t4 mtiles">' + tl.map(tile).join('') + '</div>', mAi = '', mDig = '';
+    if (!st) mTl += '<div class="hint">' + (ME && (ME.role === 'hq' || ME.role === 'admin') ? '全店のいまで店を開くと、その店の「去年のこの月」の数と掘り下げが、ここに出ます（いまは辞書の部分だけ）。' : 'このアカウントには店が結ばれていないので、辞書の部分だけを出しています。') + '</div>';
     // 2. AI のコメント → 次の一手（この月に「いつ」がかかる判断カード）
     var t = T ? monText(st, T, mo, M, evs, deps) : null;
-    if (t) h += aiHtml('AI のコメント（' + mo + '月の型・' + st.n + '）', t[0], t[1], t[2]);
-    h += '<div class="nx"><b>次の一手</b>（' + mo + '月に「いつ」がかかる判断カード・' + mcs.length + '枚）' + (mcs.length ? '<div class="nxl">' + mcs.map(kc1).join('') + '</div>' : '<p style="margin:4px 0 0">この月に「いつ」がかかる判断カードはありません。下の「くわしく（この月の資料）」と、催事ごとを見てください。</p>') + '</div>';
+    if (t) mAi += aiHtml('AI のコメント（' + mo + '月の型・' + st.n + '）', t[0], t[1], t[2]);
+    mAi += '<div class="nx"><b>次の一手</b>（' + mo + '月に「いつ」がかかる判断カード・' + mcs.length + '枚）' + (mcs.length ? '<div class="nxl">' + mcs.map(kc1).join('') + '</div>' : '<p style="margin:4px 0 0">この月に「いつ」がかかる判断カードはありません。下の「くわしく（この月の資料）」と、催事ごとを見てください。</p>') + '</div>';
     // 3. 掘る（去年のこの月、ふだんの月より売れた所: 部門 → 中分類 → 小分類 → クラス）。行を押したときは、この塊だけを描き直す
-    if (T && sx) h += blk('blk-mdig', function () { return monDrill(st, T, mo); }) + monShape(st, T, mo);
-    else if (st && !TREE) h += '<h2 class="sec" id="dig">掘り下げる</h2><div class="drill"><div class="hint wait"><span class="spin" aria-hidden="true"></span>この店の月ごとの数を読み込んでいます…</div></div>';
+    if (T && sx) mDig += blk('blk-mdig', function () { return monDrill(st, T, mo); }) + monShape(st, T, mo);
+    else if (st && !TREE) mDig += '<h2 class="sec" id="dig">掘り下げる</h2><div class="drill"><div class="hint wait"><span class="spin" aria-hidden="true"></span>この店の月ごとの数を読み込んでいます…</div></div>';
+    h += duo(mTl, mAi, mDig);
     // 4. くわしく（この月の資料・はじめ閉じる・開いたときに描く）
     h += lazyBox('d-mon', 'くわしく（この月の資料: 記念日・チラシ・よく買われるもの・天気と需要・売場の山・週のテーマ・気をつける所）', function () { return monDetail(M, evs, prep); });
     return h;
@@ -1268,7 +1523,8 @@
   }
   function lensEvent() {
     var now = new Date().getMonth() + 1, withD = DICT.events.filter(function (x) { return (x.depts || []).length; });
-    var e = byId(DICT.events, S.ev) || withD.slice().sort(function (a, b) { return evDays(a) - evDays(b); })[0] || DICT.events[0];   // はじめは、これから来る催事のうち型のある物（いちばん近い物）
+    var e = byId(DICT.events, S.ev) || withD.slice().sort(function (a, b) { return evDays(a) - evDays(b); })[0] || DICT.events[0];
+    LAST.ev = e ? e.name : '';   // はじめは、これから来る催事のうち型のある物（いちばん近い物）
     var st = curStoreTop(), T = st && TREE ? TREE : null; if (st && !TREE) ensureTree();
     var cards = evCards(e), facts = evFacts(e), calls = evCalls(cards), gs = evGroups(e), nC = 0, days = evDays(e), nd = evNext(e);
     (e.depts || []).forEach(function (d) { nC += (d.corners || []).length; });
@@ -1279,17 +1535,18 @@
       { nm: '型のある部門', u: '部門', v: gs.filter(function (g) { return g.k !== '（全体）'; }).length + '<small>部門</small>', sub2: '区分 ' + (e.depts || []).length + '・売場の型 ' + nC },
       { nm: '判断カード', u: '枚', v: cards.length + '<small>枚</small>', sub2: cards.length ? cards[0].title + (cards.length > 1 ? ' ほか' : '') : '印の付いたカードはまだありません' },
       { nm: '数字の事実', v: facts.length ? esc(fval(facts[0])) : '―', vc: 'tx', sub2: facts.length ? facts[0].metric + (facts.length > 1 ? '（ほか ' + (facts.length - 1) + '件）' : '') : 'この催事の数字の事実は、まだありません' }];
-    h += '<div class="tiles t4 etiles">' + tl.map(tile).join('') + '</div>';
-    if (e.note) h += '<p class="evnote">' + esc(e.note) + '</p>';
+    var eTl = '<div class="tiles t4 etiles">' + tl.map(tile).join('') + '</div>', eAi = '', eDig = '';
+    if (e.note) eTl += '<p class="evnote">' + esc(e.note) + '</p>';
     // 2. 図: 準備から当日までの帯の上にカード（札・図 → AI のコメント → 次の一手 までが概要）
-    h += evBand(e, cards);
+    eTl += evBand(e, cards);
     // 3. AI のコメント → 次の一手（いちばん近い時期のカード）
-    h += evAi(e, cards, facts, calls);
+    eAi += evAi(e, cards, facts, calls);
     var nx = evNextCard(e, cards);
-    h += '<div class="nx"><b>次の一手</b>: ' + (nx ? '<button type="button" data-card="' + esc(nx.c.id) + '">' + esc(nx.c.title) + ' ▸</button>（' + esc(cardWhen(nx.c, e)) + '・' + (nx.act ? 'いまがその時期' : 'あと ' + Math.ceil(nx.k / DAY) + '日で始まる') + (nx.c.dept ? '・' + esc(nx.c.dept) : '') + '）' : 'この催事に印の付いた判断カードはまだありません。下の掘り下げで、部門ごとの予定と注意点を見てください。') + '</div>';
+    eAi += '<div class="nx"><b>次の一手</b>: ' + (nx ? '<button type="button" data-card="' + esc(nx.c.id) + '">' + esc(nx.c.title) + ' ▸</button>（' + esc(cardWhen(nx.c, e)) + '・' + (nx.act ? 'いまがその時期' : 'あと ' + Math.ceil(nx.k / DAY) + '日で始まる') + (nx.c.dept ? '・' + esc(nx.c.dept) : '') + '）' : 'この催事に印の付いた判断カードはまだありません。下の掘り下げで、部門ごとの予定と注意点を見てください。') + '</div>';
     // 4. 掘る（部門 → 区分 → 売場の型・計画・注意点・反省・カード）。行を押したときは、この塊だけを描き直す
-    if (gs.length) h += blk('blk-edig', function () { return '<h2 class="sec" id="dig">掘り下げる — 部門 → 区分 → 売場の型・計画・注意点</h2>' + evDrill(e, T, '') + '<div class="hint">行を押すと、すぐ下にその中が開きます（もう一度押すと閉じる）。区分を押すと、予定・注意点・変わった所・売場の型・計画（長い文は「続き」で全文）と、その部門の判断カードが開きます。</div>'; });
-    else h += '<h2 class="sec" id="dig">掘り下げる</h2><div class="box"><p style="margin:0">この催事は、部門ごとの型がまだありません（資料に催事固有の指示が無いため）。今月の型と判断カードを見てください。</p></div>';   // 空の表は出さない
+    if (gs.length) eDig += blk('blk-edig', function () { return '<h2 class="sec" id="dig">掘り下げる — 部門 → 区分 → 売場の型・計画・注意点</h2>' + evDrill(e, T, '') + '<div class="hint">行を押すと、すぐ下にその中が開きます（もう一度押すと閉じる）。区分を押すと、予定・注意点・変わった所・売場の型・計画（長い文は「続き」で全文）と、その部門の判断カードが開きます。</div>'; });
+    else eDig += '<h2 class="sec" id="dig">掘り下げる</h2><div class="box"><p style="margin:0">この催事は、部門ごとの型がまだありません（資料に催事固有の指示が無いため）。今月の型と判断カードを見てください。</p></div>';   // 空の表は出さない
+    h += duo(eTl, eAi, eDig);
     // 5. くわしく（はじめ閉じる）: 部門ごとの表・展開の型の表
     var rows = (e.depts || []).map(function (d) { return '<tr><td>' + esc(d.dept6 || d.dept) + '</td><td>' + esc(d.area || '') + '</td><td class="w">' + esc(d.schedule || '―') + '</td><td class="w">' + esc(d.caution || '―') + '</td><td class="w">' + esc(d.change || '―') + '</td></tr>'; }).join('');
     var cn = []; (e.depts || []).forEach(function (d) { (d.corners || []).forEach(function (c) { cn.push('<tr><td>' + esc(d.dept6 || d.dept) + '</td><td>' + esc(c.name) + '</td><td class="w">' + esc(c.items || '') + '</td><td class="w">' + esc(c.how || '') + '</td></tr>'); }); });
@@ -1373,19 +1630,22 @@
     var opts = st ? kids(st).reduce(function (o, x) { o.push({ id: x.id, n: x.n.n }); if (x.n.alt && all[x.n.alt]) o.push({ id: x.n.alt, n: all[x.n.alt].n }); return o; }, []) : DEPT_ORDER.map(function (nm) { return { id: '', n: nm }; });
     if (!opts.length) opts = DEPT_ORDER.map(function (nm) { return { id: '', n: nm }; });
     var cur = opts.filter(function (o) { return o.n === S.dept; })[0] || opts[0], pos = cur.n, d6 = POS2DICT[deptBase(pos)] || '', n = st && cur.id ? all[cur.id] : null;
+    LAST.dept = pos;
     var h = '<h1 class="vt" id="lvtop">部門ごと<small>' + (st ? esc(st.n) + '｜' : '') + 'POS の8部門' + (d6 ? '｜型とカードは辞書の「' + esc(d6) + '」から' : '') + '</small></h1>';
     h += '<div class="ctl"><div class="dsel" role="group" aria-label="部門"><span class="lb">部門</span>' + opts.map(function (o) { var c = deptCol(o.n); return '<button type="button" data-pdept="' + esc(o.n) + '" aria-pressed="' + (o.n === pos) + '"' + (c ? ' style="--dbg:' + c[0] + ';--dac:' + c[1] + '"' : '') + '>' + (c ? '<i aria-hidden="true"></i>' : '') + esc(o.n) + '</button>'; }).join('') + '</div>' + (n || (hq && ME.map) ? metricBar(n || { lv: 1 }) : '') + '</div>';
     // 1. その部門の札（いまの様子と同じ分析の札6枚）→ AI のコメント
     var dh = hq && ME.map ? deptStores(pos) : null, aiH = n ? (S.an === 'yo' ? aiBox(n) : anBox(n)) : '';
-    if (n) h += tiles(n) + aiH;
-    else h += (dh ? dh.top : '') + '<div class="hint">' + (hq ? '全体の地図で店を開くと、その店の' + esc(pos) + 'の札・AI のコメント・中分類 → クラスの掘り下げが、ここに出ます。いまは全社の' + esc(pos) + '（地図の数）・辞書の型・店ごとの違い（本部だけ）を出しています。' : 'このアカウントには店が結ばれていないので、辞書の部分だけを出しています。') + '</div>';
+    var dTl = '', dAi = '', dDig = '';
+    if (n) { dTl += tiles(n); dAi += aiH; }
+    else dTl += (dh ? dh.top : '') + '<div class="hint">' + (hq ? '全店のいまで店を開くと、その店の' + esc(pos) + 'の札・AI のコメント・中分類 → クラスの掘り下げが、ここに出ます。いまは全社の' + esc(pos) + '（地図の数）・辞書の型・店ごとの違い（本部だけ）を出しています。' : 'このアカウントには店が結ばれていないので、辞書の部分だけを出しています。') + '</div>';
     // 2. 次の一手（その部門の判断カード）。カードが無い部門は作文で埋めない。AI のコメントに次の一手がある分析（前年比）では、カードは「あわせて見る」
     var cs = d6 ? DICT.cards.filter(function (c) { return c.dept === d6; }) : [];
-    h += '<div class="nx"><b>' + (aiH.indexOf('class="nx"') >= 0 ? 'あわせて見る' : '次の一手') + '</b>（' + esc(d6 || pos) + 'の判断カード・' + cs.length + '枚）' + (cs.length ? '<div class="nxl">' + cs.map(kc1).join('') + '</div>' : '<p style="margin:4px 0 0"><span class="tag gap">本部が書く欄</span> この部門のカードは、まだありません（作文では埋めません）。全部門のカードは下の「くわしく」に。</p>') + '</div>';
+    dAi += '<div class="nx"><b>' + (aiH.indexOf('class="nx"') >= 0 ? 'あわせて見る' : '次の一手') + '</b>（' + esc(d6 || pos) + 'の判断カード・' + cs.length + '枚）' + (cs.length ? '<div class="nxl">' + cs.map(kc1).join('') + '</div>' : '<p style="margin:4px 0 0"><span class="tag gap">本部が書く欄</span> この部門のカードは、まだありません（作文では埋めません）。全部門のカードは下の「くわしく」に。</p>') + '</div>';
     // 3. 掘る（数）: 中分類 → 小分類 → クラス（この画面の中で・別の画面へ飛ばさない）
-    if (n) h += blk('blk-dig', function () { return drill(n); });
+    if (n) dDig += blk('blk-dig', function () { return drill(n); });
     // 4. その部門の1年（月の形と催事）＝ 掘る（辞書）: 催事 → 区分 → 型・カード
-    h += blk('blk-dyear', function () { return deptYear(pos, d6, n); });
+    dDig += blk('blk-dyear', function () { return deptYear(pos, d6, n); });
+    h += duo(dTl, dAi, dDig);
     // 5. 本部だけ: 店ごとの違い（地図の 店 × 部門 の数）
     if (dh) h += dh.body;
     var allc = DICT.cards.filter(function (c) { return !c.dept; });
@@ -1402,21 +1662,23 @@
     return '<' + el + ' class="drow' + (attrs ? '' : ' leaf') + '"' + (attrs || '') + '><span class="n"><span class="ar">' + (attrs ? '▶' : '・') + '</span><span>' + esc(label) + '</span>' + (tag || '') + '</span><span class="pct ' + cls(v) + '">' + sg(v) + '%</span><span class="bar" aria-hidden="true"><span class="zl"></span>' + b + ci + '</span><span class="val">' + esc(aside(sub)) + '</span></' + (attrs ? 'button' : 'div') + '>';
   }
   function wxTop() {
-    var W = DICT.weather || {}, hq = ME && (ME.role === 'hq' || ME.role === 'admin'), st = curStoreTop(), h = '';
+    var W = DICT.weather || {}, hq = ME && (ME.role === 'hq' || ME.role === 'admin'), st = curStoreTop(), h = '', meH = '', allH = '';
     var evRows = []; (W.groups || []).forEach(function (g) { (g.rows || []).forEach(function (r) { if (r.ev && r.ev.areas && r.ev.areas.length) evRows.push(r); }); });
     // ① 自店（店の人・本部が店を開いているとき）: 来客数で、雨と強い雨。物差しは同じ型の店の中央
     if (st && st.wxs && st.wxs.c) {
       var C = st.wxs.c, vals = [0, 1].map(function (i) { return C[i] && isFinite(C[i][0]) ? C[i][0] : NaN; }), mk = nc() ? null : [0, 1].map(function (i) { return C[i] ? (isFinite(C[i][1]) ? C[i][1] : C[i][2]) : NaN; });
-      h += '<div class="box wxme"><h3>' + esc(meta().st.nm) + 'の雨の日（来客数・ふだんの同じ曜日との差）</h3>' + bars(vals, ['雨（10mm〜）', '強い雨（30mm〜）'], { base: 0, fmt: function (x) { return sg(x) + '%'; }, mark: mk, markName: '同じ型の店の中央（無いときはエリアの中央）', barName: 'この店', unit: '%', title: '自店の雨の日の効き' }) +
+      meH += '<div class="box wxme"><h3>' + esc(meta().st.nm) + 'の雨の日（来客数・ふだんの同じ曜日との差）</h3>' + bars(vals, ['雨（10mm〜）', '強い雨（30mm〜）'], { base: 0, fmt: function (x) { return sg(x) + '%'; }, mark: mk, markName: '同じ型の店の中央（無いときはエリアの中央）', barName: 'この店', unit: '%', title: '自店の雨の日の効き' }) +
         '<p class="hint">' + (mk ? '紫の点線＝同じ型の店の中央。' : esc(NC_NOTE)) + 'どの部門・クラスで減るかは、下のボタンで掘り下げて見られます。</p>' +
         '<div class="nx"><button type="button" data-anhome="wx">' + esc(meta().st.nm) + 'の雨の日の効きを、部門 → 中分類 → クラスまで見る ▸</button></div></div>';
-    } else if (ME && ME.role === 'store') h += '<div class="box"><p style="margin:0">' + esc((CUR && DATA[CUR] && DATA[CUR].none) || 'この店の雨の日の数を読み込んでいます…') + '</p></div>';
+    } else if (ME && ME.role === 'store') meH += '<div class="box"><p style="margin:0">' + esc((CUR && DATA[CUR] && DATA[CUR].none) || 'この店の雨の日の数を読み込んでいます…') + '</p></div>';
     // ② 全店・エリアの効き（同じ0の線・細い線＝確からしい幅）
     if (evRows.length) {
       var R = 5; evRows.forEach(function (r) { r.ev.areas.forEach(function (a) { R = Math.max(R, Math.abs(a.v), isFinite(a.lo) ? Math.abs(a.lo) : 0); }); }); R = Math.min(40, Math.ceil(R / 5) * 5);
-      h += '<h2 class="sec" id="wxall">天気で来客数がどう動くか — 全店とエリア</h2><div class="drill an"><div class="lg"><span>その天気の日の来客数（同じ店・同じ曜日・同じ月のふだんとの差）</span><span><i style="background:#e07a6e"></i>減る</span><span><i style="background:#5b8fd6"></i>増える</span><span><i style="background:#1f2933;height:2px;vertical-align:3px"></i>確からしい幅</span><span>目盛りの端 ±' + R + '%</span>' + asideLg('確からしさ') + '</div>' +
+      allH += '<h2 class="sec" id="wxall">天気で来客数がどう動くか — 全店とエリア</h2><div class="drill an"><div class="lg"><span>その天気の日の来客数（同じ店・同じ曜日・同じ月のふだんとの差）</span><span><i style="background:#e07a6e"></i>減る</span><span><i style="background:#5b8fd6"></i>増える</span><span><i style="background:#1f2933;height:2px;vertical-align:3px"></i>確からしい幅</span><span>目盛りの端 ±' + R + '%</span>' + asideLg('確からしさ') + '</div>' +
         evRows.map(function (r) { return '<div class="grp">' + esc(r.what) + '｜' + esc(r.hitokoto || '') + '</div>' + r.ev.areas.map(function (a) { return ciRow(a.label, a.v, a.lo, a.hi, R, '', '', '確か ' + (a.sure || '―')); }).join(''); }).join('') + '</div>';
     }
+    // 幅のある PC（1480〜）: 自店の雨の日（左）と、全店・エリアの効き（右）を並べる（PO 11/17e「図を左右に」）
+    h += meH && allH ? '<div class="wxtop"><div class="wx-me">' + meH + '</div><div class="wx-all">' + allH + '</div></div>' : meH + allH;
     // ③ 店ごと（本部だけ・店の人にはほかの店の名前と数を出さない）
     if (hq && W32) h += blk('blk-w32', w32Block);   // 行を押す・雨の強さ・見る数を替えるときは、この塊だけを描き直す
     else if (hq) {
@@ -1430,13 +1692,13 @@
           '<div class="drill an"><div class="lg"><span>店ごとの来客数の差（減る順）</span><span><i style="background:#1f2933;height:2px;vertical-align:3px"></i>確からしい幅</span><span>目盛りの端 ±' + Rs + '%</span>' + asideLg('エリア・雨の日の数') + '</div>' +
           ss.map(function (s) { var m = code[s.name] || code[s.name + '店']; return ciRow(s.name, s.v, s.lo, s.hi, Rs, m ? ' data-wxstore="' + esc(m.c) + '" title="押すと、' + esc(m.nm) + 'の雨の日の効きを部門・クラスまで見られます"' : '', m && m.nc ? ' <small class="nctag">比べない</small>' : '', (s.area || '') + (s.days ? '・' + s.days + '日' : '')); }).join('') + '</div>' +
           '<div class="hint">店を押すと、その店のステータスが「雨の日の効き」で開き、部門 → 中分類 → クラスへ掘れます。' + (cur.ev.stores_note ? esc(cur.ev.stores_note) : '') + '</div>' +
-          (W32_ERR ? '<div class="hint">店の中（部門 → クラス）の数を受け取れませんでした（' + esc(W32_ERR) + '）。<button type="button" class="hbtn" data-w32retry="1">もう一度受け取る</button>　<a href="reports/#/WEATHER/w-s3b">分析レポートの 3-2 で見る ▸</a></div>'
+          (W32_ERR ? '<div class="hint">店の中（部門 → クラス）の数を受け取れませんでした（' + esc(W32_ERR) + '）。<button type="button" class="hbtn" data-w32retry="1">もう一度受け取る</button>　' + extA('reports/#/WEATHER/w-s3b', '分析レポートの 3-2 で見る（新しいタブ）') + '</div>'
             : '<div class="hint wait"><span class="spin" aria-hidden="true"></span>店の中（部門 → 中分類 → クラス）の数を受け取っています…（数秒・届いたら、この一覧が押して開ける形に替わります）</div>');
       }
     }
     if (hq) {
-      h += '<div class="box"><h3>図とグラフで全部見る（分析レポート「売れ方・ロス・天気の分析」・本部だけ）</h3><div class="chips">' +
-        [['w-s1', '結論'], ['w-s3', '天気と来客数'], ['w-s3b', '店ごとの違い'], ['w-s3c', '部門ごとの店の並び'], ['w-s4', '部門ごとの買い方'], ['w-s4c', '雨の日に減る小分類'], ['w-s6', '時間帯と雨'], ['w-s6c', '天気と売れ残り']].map(function (x) { return '<a class="chip" href="reports/#/WEATHER/' + x[0] + '">' + esc(x[1]) + ' ▸</a>'; }).join('') + '</div></div>';
+      h += '<div class="box"><h3>図とグラフで全部見る（分析レポート「売れ方・ロス・天気の分析」・本部だけ・新しいタブで開きます）</h3><div class="chips">' +
+        [['w-s1', '結論'], ['w-s3', '天気と来客数'], ['w-s3b', '店ごとの違い'], ['w-s3c', '部門ごとの店の並び'], ['w-s4', '部門ごとの買い方'], ['w-s4c', '雨の日に減る小分類'], ['w-s6', '時間帯と雨'], ['w-s6c', '天気と売れ残り']].map(function (x) { return extA('reports/#/WEATHER/' + x[0], esc(x[1]), 'chip'); }).join('') + '</div></div>';
     }
     return h;
   }
@@ -1521,14 +1783,8 @@
   function openTerm(nm) { var t = DICT.terms.filter(function (x) { return x.name === nm; })[0]; if (t) dlg('<h3>' + esc(t.name) + '<small style="font-weight:400">（' + esc(t.reading || '') + '）</small></h3><div><span class="tag hq">用語</span></div><p>' + esc(t.short || '') + '</p>' + (t.example ? '<p class="hint">' + esc(t.example) + '</p>' : '')); }
 
   // ── 利用ガイド・更新の状態（開いたときだけ窓口へ。2回目からは覚えた物）
-  var GUIDE = null, ADMIN = null;
+  var ADMIN = null;
   function safeHtml(s) { return String(s).replace(/<\/?(script|iframe|object|embed|link|meta|style)\b[^>]*>/gi, '').replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '').replace(/(href|src)\s*=\s*("|')\s*javascript:[^"']*\2/gi, ''); }
-  function viewGuide() {
-    if (!GUIDE) { AUTH.call('statusGuide').then(function (r) { if (r && r.ok) { GUIDE = r; if (S.view === 'guide') render({}); } else onFail(r); }); return '<h1 class="vt" id="lvtop">店舗運営/MDの辞書利用ガイド</h1><div class="hint wait"><span class="spin" aria-hidden="true"></span>読み込んでいます…</div>'; }
-    var toc = [], re = /<section\b[^>]*id="([^"]+)"[^>]*>\s*<h3>([^<]*)<\/h3>/g, m;
-    while ((m = re.exec(GUIDE.html))) toc.push('<button type="button" data-gsec="' + esc(m[1]) + '">' + m[2] + '</button>');   // 目次は本文の見出しから作る（節を足せば目次も付いてくる）
-    return '<h1 class="vt" id="lvtop">店舗運営/MDの辞書利用ガイド<small>' + esc(roleLabel()) + '向け</small></h1><div class="dchips gtoc" role="navigation" aria-label="利用ガイドの目次">' + toc.join('') + '</div><div class="guide1">' + safeHtml(GUIDE.html) + '</div>';
-  }
   function viewAdmin() {
     if (!ADMIN) { AUTH.call('statusAdmin').then(function (r) { if (r && r.ok) { ADMIN = r; if (S.view === 'admin') render({}); } else onFail(r); }); return '<h1 class="vt" id="lvtop">更新の状態</h1><div class="hint wait"><span class="spin" aria-hidden="true"></span>読み込んでいます…</div>'; }
     var rows = ADMIN.files.map(function (f) { return '<tr><td>' + esc(f.name) + '</td><td class="n">' + num(f.size / 1024) + '</td><td>' + esc(f.date) + '</td></tr>'; }).join('');
@@ -1663,7 +1919,7 @@
     return '<h2 class="sec" id="wxstores">店ごとの違い — ' + esc(rn) + 'の日の' + mn + '（本部だけ）</h2>' + sw + '<div class="drill an w32">' + lg + ruler(divTicks(R, 0, pctTick)) + rows + '</div>' +
       '<div class="hint">店の行を押すと、すぐ下に部門が開きます。部門 → 中分類 → 小分類 → クラスと、押すたびに細かく開きます（もう一度押すと閉じる）。' +
       '店の行は店全体の' + (m ? '来客数（（ ）は1人あたり点数）' : '売上（（ ）は客単価）') + '、部門より下は' + (m ? 'その分類を買った人の数' : 'その分類の売上') + 'です。棒の塗り・枠・点線は、数の確かさ（ふだんの揺れで説明できない確からしさ）。紫の点線は、その店の値です。行の地の色・左の帯は部門の印（増え減りの色ではありません）。' +
-      '数は分析レポート「売れ方・ロス・天気の分析」' + (W32_LABEL ? '（' + esc(W32_LABEL) + '）' : '') + 'の 3-2 と同じです。<a href="reports/#/WEATHER/w-s3b">レポートの 3-2 で見る ▸</a></div>';
+      '数は分析レポート「売れ方・ロス・天気の分析」' + (W32_LABEL ? '（' + esc(W32_LABEL) + '）' : '') + 'の 3-2 と同じです。' + extA('reports/#/WEATHER/w-s3b', 'レポートの 3-2 で見る（新しいタブ）') + '</div>';
   }
   function w32Toggle(i) {
     var d = W32; if (!d || !d.r[i] || !(d.r[i][3] & 4) || !d.k[i].length) return;
@@ -1723,7 +1979,7 @@
   function pickStore(code, dep) {
     var path = dep ? ['S', dep] : ['S'];
     if (code === CUR && S.view === 'status' && S.path.join() === path.join()) return;
-    HIST.push(snap()); if (HIST.length > 200) HIST.shift();
+    pushHist();
     useStore(code); S.view = 'status'; S.path = path; S.open = [];
     render({ top: true });
     ensureTree();   // 要約で先に描き、木は裏で受け取る（掘る・戻るは往復 0）
@@ -1808,9 +2064,11 @@
   function bind() {
     document.addEventListener('click', function (e) {
       if (!e.target.closest('#acct')) $('#acctmenu').classList.remove('on');
-      if (!e.target.closest('#apps')) $('#appsmenu').classList.remove('on');
+      if (narrowNav() && $('#side').classList.contains('on') && !e.target.closest('#side') && !e.target.closest('#menubtn')) sideOpen(false);
       if (!e.target.closest('.res') && !e.target.closest('input')) $$('.res').forEach(function (x) { x.classList.remove('on'); });
       if (e.target === $('#dlg')) { closeDlg(); return; }
+      if (e.target.closest('.guide2') && gdClick(e)) return;   // 利用ガイドの中（地図の箱・見たいこと・この画面へ）
+      if (narrowNav() && e.target.closest('#sideapps a')) sideOpen(false);
       var b = e.target.closest('button,[role="button"]'); if (!b) return;
       var ds = b.dataset;
       if (ds.close) closeDlg();
@@ -1821,23 +2079,28 @@
       if (ds.month) { go({ month: (((S.month || (new Date().getMonth() + 1)) - 1 + +ds.month) % 12 + 12) % 12 + 1 }, { keep: true }); return; }
       if (ds.pdept != null) { if (ds.pdept !== S.dept) go({ dept: ds.pdept, open: [] }, { keep: true }); return; }   // 部門ごと: POS の部門を選ぶ
       if (ds.more) { var ct = b.closest('.ct'); if (ct) { ct.classList.toggle('full'); b.textContent = ct.classList.contains('full') ? '閉じる ▴' : '続き ▸'; } return; }   // 長い文の「続き」（その場で全文・描き直さない）
-      if (ds.gsec) { var sec = document.getElementById(ds.gsec); if (sec) { HIST.push(snap()); $('#back').disabled = false; glide(window.scrollY + sec.getBoundingClientRect().top - stickyH() - 10); sec.classList.remove('landed'); void sec.offsetWidth; sec.classList.add('landed'); } return; }
       if (ds.slides) { showSlides(ds.slides.split(','), b); return; }
-      if (b.id === 'back') return back();
-      if (b.id === 'totop') { HIST.push(snap()); $('#back').disabled = false; glide(0); toast('↑ いちばん上へ'); return; }
+      if (ds.nav === 'back') { if (narrowNav()) sideOpen(false); return back(); }
+      if (ds.nav === 'top') { if (narrowNav()) sideOpen(false); pushHist('scroll'); setBack(); glide(0); toast('↑ いちばん上へ'); return; }
+      if (b.id === 'menubtn') { sideOpen(!$('#side').classList.contains('on')); return; }
+      if (b.id === 'fromchip') { fromBack(); return; }
+      if (b.id === 'guidebtn') { openGuide(); return; }
+      if (ds.sx) { if (narrowNav()) sideOpen(false); sideGo(ds.sx); return; }
       if (b.id === 'upbtn') { if (S.path.length > 1) go({ view: 'status', path: S.path.slice(0, -1) }, { land: true }); return; }
       if (b.id === 'acctbtn') { $('#acctmenu').classList.toggle('on'); return; }
-      if (b.id === 'appsbtn') { $('#appsmenu').classList.toggle('on'); return; }
       if (b.id === 'logout') { AUTH.logout(); return; }
-      if (ds.lens) { if (ds.lens === 'home') go({ view: 'home', path: ['S'] }, { top: true }); else go({ view: ds.lens }, { top: true }); return; }
-      if (ds.view === 'home-map') { HIST.push(snap()); useStore(''); S.view = 'home'; S.path = ['S']; S.open = []; render({ top: true }); return; }
+      if (ds.lens) {   // 左のサイドの画面の木＝タブ（来た所の札は消す）。本文の中の「〇〇を開く」は、来た所の札を出す
+        var inSide = !!b.closest('#side'); if (inSide && narrowNav()) sideOpen(false);
+        if (ds.lens === 'guide') { openGuide(); return; }
+        if (ds.lens === 'home') go({ view: 'home', path: ['S'] }, { top: true, nav: inSide ? 'tab' : '' }); else go({ view: ds.lens }, { top: true, nav: inSide ? 'tab' : '' }); return;
+      }
+      if (ds.view === 'home-map') { if (narrowNav()) sideOpen(false); pushHist(); useStore(''); S.view = 'home'; S.path = ['S']; S.open = []; render({ top: true }); return; }
       if (ds.view) { go({ view: ds.view }, { top: true }); return; }
       if (ds.store) { pickStore(ds.store, ds.sdep); return; }   // 本部の地図の店の札（部門を選んでいれば、その店のその部門へ）
       if (ds.mdp != null) { try { localStorage.setItem('storeops_mdp_v1', ds.mdp); } catch (e2) {} if (ds.mdp !== S.mdp) go({ mdp: ds.mdp }, { keep: true }); return; }   // 本部の地図の見る範囲（全社／部門）
-      if (ds.act === 'guide') { go({ view: 'guide' }, { top: true }); return; }
       if (ds.crumb != null) { go({ view: 'status', path: S.path.slice(0, +ds.crumb + 1) }, { land: true }); return; }
       if (ds.anhome) { go({ view: 'status', path: ['S'], an: ds.anhome }, { top: true }); return; }   // 天気と売れ方 → 自店のステータスをその分析で
-      if (ds.wxstore) { HIST.push(snap()); if (HIST.length > 200) HIST.shift(); useStore(ds.wxstore); S.view = 'status'; S.path = ['S']; S.open = []; S.an = 'wx'; render({ top: true }); ensureTree(); return; }   // 本部: 店ごとの雨の効き → その店を雨の日の効きで
+      if (ds.wxstore) { pushHist(); useStore(ds.wxstore); S.view = 'status'; S.path = ['S']; S.open = []; S.an = 'wx'; render({ top: true }); ensureTree(); return; }   // 本部: 店ごとの雨の効き → その店を雨の日の効きで
       if (ds.an) { go({ an: ds.an }, { keep: true }); return; }
       if (ds.wl != null) { go({ wl: +ds.wl }, { keep: true, part: S.view === 'wx' && W32 ? 'blk-w32' : '' }); return; }   // 天気と売れ方の店ごとの違いの中なら、その塊だけ
       if (ds.m) { go({ m: ds.m }, { keep: true }); return; }
@@ -1855,8 +2118,8 @@
     });
     document.addEventListener('keydown', function (e) {
       var t = e.target;
-      if ((e.key === 'Enter' || e.key === ' ') && t.getAttribute && t.getAttribute('role') === 'button') { e.preventDefault(); t.dispatchEvent(new MouseEvent('click', { bubbles: true })); return; }   // 図の中の催事（svg）にも効く
-      if (e.key === 'Escape') { $('#acctmenu').classList.remove('on'); $('#appsmenu').classList.remove('on'); closeDlg(); $$('.res').forEach(function (x) { x.classList.remove('on'); }); return; }
+      if ((e.key === 'Enter' || e.key === ' ') && t.getAttribute && (t.getAttribute('role') === 'button' || (t.getAttribute('role') === 'link' && t.closest('.guide2')))) { e.preventDefault(); t.dispatchEvent(new MouseEvent('click', { bubbles: true })); return; }   // 図の中の催事（svg）にも効く
+      if (e.key === 'Escape') { $('#acctmenu').classList.remove('on'); if (narrowNav()) sideOpen(false); closeDlg(); $$('.res').forEach(function (x) { x.classList.remove('on'); }); return; }
       if (t.id === 'q1') {
         var box = $('#r1'), items = $$('button[data-hit]', box), cur = items.findIndex(function (x) { return x.classList.contains('act'); });
         if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (!items.length) return; var nx = e.key === 'ArrowDown' ? Math.min(items.length - 1, cur + 1) : Math.max(0, cur - 1); items.forEach(function (x, i) { x.classList.toggle('act', i === nx); }); items[nx].scrollIntoView({ block: 'nearest' }); }
@@ -1864,7 +2127,7 @@
       }
     });
     // 人が送る・押す・打つと、滑り（glide）を止める（人の操作と滑りが取り合わない・11/17d）
-    var glCancel = function () { if (glStop) { glStop(); glStop = null; cancelAnimationFrame(gl); clearTimeout(glT); } };
+    var glCancel = function (ev) { if (ev && ev.type === 'pointerdown' && ev.target.closest && ev.target.closest('#side')) return; SPY.pin = ''; if (glStop) { glStop(); glStop = null; cancelAnimationFrame(gl); clearTimeout(glT); } };
     ['wheel', 'touchstart', 'pointerdown', 'keydown'].forEach(function (ev) { window.addEventListener(ev, glCancel, { passive: true, capture: true }); });
     var c3drag = null;   // 立体の棒: 左右に引いて回す（指でも・マウスでも）
     document.addEventListener('pointerdown', function (e) { var s = e.target.closest && e.target.closest('.c3s'); if (!s || e.pointerType === 'touch' || e.button) return; /* 指は横に送る（はみ出した図を動かす）・回すのはボタンで */ c3drag = { x: e.clientX, y0: C3.yaw, raf: 0 }; s.classList.add('drag'); });
@@ -1874,11 +2137,29 @@
       if (!c3drag.raf) c3drag.raf = requestAnimationFrame(function () { if (c3drag) c3drag.raf = 0; c3Redraw(); });
     });
     var c3up = function () { if (!c3drag) return; c3drag = null; $$('.c3s.drag').forEach(function (s) { s.classList.remove('drag'); }); };
+    // 立体の棒の札: 矢印を合わせると出る（1コマに1回）・外すと消える。指は押したときに出す
+    document.addEventListener('pointermove', function (e) {
+      if (e.pointerType === 'touch') return; C3TIP.ev = e; if (C3TIP.raf) return;
+      C3TIP.raf = requestAnimationFrame(function () { C3TIP.raf = 0; var ev = C3TIP.ev, g = !c3drag && ev.target.closest && ev.target.closest('.c3s g[data-k]'); if (g) c3TipShow(g, ev.clientX, ev.clientY); else if (C3TIP.g) c3TipHide(); });
+    }, { passive: true });
+    document.addEventListener('pointerdown', function (e) { if (e.pointerType !== 'touch') return; var g = e.target.closest && e.target.closest('.c3s g[data-k]'); if (g) c3TipShow(g, e.clientX, e.clientY); else c3TipHide(); }, { passive: true });
+    window.addEventListener('scroll', function () { if (C3TIP.g) c3TipHide(); }, { passive: true });
     document.addEventListener('pointerup', c3up); document.addEventListener('pointercancel', c3up);
     document.addEventListener('input', function (e) { var t = e.target; if (t.id !== 'q1') return; clearTimeout(stimer); stimer = setTimeout(function () { search(t, $('#r1')); }, 120); });
-    window.addEventListener('scroll', fhSchedule, { passive: true });
+    window.addEventListener('scroll', function () { fhSchedule(); sideSpySoon(); }, { passive: true });
+    // 探す欄（上の帯）: 空のまま押すと、困りごとの言葉の例
+    document.addEventListener('focusin', function (e) { if (e.target && e.target.id === 'q1' && !e.target.value.trim()) { var r1 = $('#r1'); r1.innerHTML = qExamples(); r1.classList.add('on'); } });
+    // 左の目次の幅を掴んで変える（この端末に覚える）
+    (function () {
+      var g = $('#sidegrip'), drag = null, w = 0; try { w = parseInt(localStorage.getItem('storeops_side_w_v1') || '', 10); } catch (e) { w = 0; }
+      if (w >= 180 && w <= 420) document.documentElement.style.setProperty('--side', w + 'px');
+      if (!g) return;
+      g.addEventListener('pointerdown', function (e) { drag = { x: e.clientX, w: $('#side').getBoundingClientRect().width }; g.setPointerCapture(e.pointerId); e.preventDefault(); });
+      g.addEventListener('pointermove', function (e) { if (!drag) return; var nw = Math.max(180, Math.min(420, Math.round(drag.w + e.clientX - drag.x))); document.documentElement.style.setProperty('--side', nw + 'px'); });
+      g.addEventListener('pointerup', function () { if (!drag) return; drag = null; try { localStorage.setItem('storeops_side_w_v1', String(parseInt(getComputedStyle(document.documentElement).getPropertyValue('--side'), 10))); } catch (e) { /* 覚えられなくても今は使える */ } fhSchedule(); });
+    })();
     document.addEventListener('scroll', function (e) { if (e.target && e.target.classList && e.target.classList.contains('tw')) fhSchedule(); }, true);
-    window.addEventListener('resize', function () { document.documentElement.style.setProperty('--hdr', $('#hdr').offsetHeight + 'px'); fhSchedule(); var nar = window.innerWidth < 760; if (nar !== C3.nar) { C3.nar = nar; c3Redraw(); } });
+    window.addEventListener('resize', function () { document.documentElement.style.setProperty('--hdr', $('#hdr').offsetHeight + 'px'); fhSchedule(); if (!narrowNav()) sideOpen(false); var nar = window.innerWidth < 760; if (nar !== C3.nar) { C3.nar = nar; c3Redraw(); } });
     document.addEventListener('toggle', function (e) { var d = e.target; if (d && d.matches && d.matches('details[data-lazy]') && d.open) fillLazy(d); if (d && d.matches && d.matches('details[data-lzf]') && d.open) fillLzf(d); fhSchedule(); }, true);
     window.addEventListener('beforeprint', function () { $$('details[data-lzf]').forEach(fillLzf); });
   }
@@ -1893,15 +2174,18 @@
       try { localStorage.setItem('storeops_role_v1', String(r.role || 'none')); } catch (e) { /* 前の辞書の画面が、分析レポートの入口を出すかを決めるだけ（見られる範囲は窓口が決める） */ }
       if (r.role === 'store') { (r.stores || []).forEach(function (c) { DATA[c] = { sum: (r.summaries && r.summaries[c]) || null, none: r.nodata ? r.note : null }; }); useStore(r.stores[0]); }
       else useStore('');
-      $('#acctbtn').innerHTML = '<span class="al">' + esc(r.email) + '（' + esc(roleLabel()) + '）</span>▾';
-      $('#appsmenu').innerHTML = appLinks();
-      $('#builds').textContent = '画面 ' + ((window.STOREOPS_CONFIG || {}).build || '作業用') + '／窓口 ' + (r.build || '―');   // 公開の確かめ（どの版が出ているか）
+      $('#acctbtn').innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5.2" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M2.5 14.5c.6-3 2.8-4.6 5.5-4.6s4.9 1.6 5.5 4.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span class="al">' + esc(r.email) + '（' + esc(roleLabel()) + '）</span>▾';
+      $('#acctwho').textContent = r.email + '（' + roleLabel() + '）';
+      $('#sideapps').innerHTML = appLinks();
+      $('#builds').textContent = '画面 ' + ((window.STOREOPS_CONFIG || {}).build || '作業用') + '／窓口 ' + (r.build || '―');
+      $('#sidever').textContent = '版: 画面 ' + ((window.STOREOPS_CONFIG || {}).build || '作業用') + '／窓口 ' + (r.build || '―');   // 公開の確かめ（左のサイドの下・スクロールせずに見つかる所）   // 公開の確かめ（どの版が出ているか）
       hideGate();
       try { render({}); } catch (e) { showGate('画面を描けませんでした（' + String(e && e.message || e).slice(0, 80) + '）。開き直してください。', true, function () { location.reload(); }); throw e; }
       window.__statusT = { start: performance.now() - t0 };
       if (CUR) ensureTree();
       loadDict();   // 辞書の中身と探す欄の読みの表を、裏で受け取る（型の選び・探すは、そのあと往復 0）
-      if (r.role === 'hq' || r.role === 'admin') setTimeout(w32Load, 1200);   // 天気と売れ方の店ごとの違い（分析レポート 3-2 と同じ数）を、最初の画面のあとに裏で受け取る
+      if (r.role === 'hq' || r.role === 'admin') setTimeout(w32Load, 1200);
+      setTimeout(gdFetch, 2500);   // 利用ガイドの中身を、最初の画面のあとに裏で1回（押したときの待ちを 0 に）   // 天気と売れ方の店ごとの違い（分析レポート 3-2 と同じ数）を、最初の画面のあとに裏で受け取る
     }, function () { showGate('通信できませんでした。通信の状態を確かめて、もう一度お試しください。', true, function () { onReady(email); }); });   // 通信の失敗と、描く所の失敗を分けて知らせる
   }
   /** 見た目のファイルが、この画面の版の物か（公開の直後に、古い見た目のファイルと組みで読まれたことがある・2026-11-16）。違えば、版の印つきで読み直す（1回だけ） */
@@ -1920,9 +2204,10 @@
     cssGuard();
     main = $('#main'); FH = $('#fh');
     document.documentElement.style.setProperty('--hdr', $('#hdr').offsetHeight + 'px');
+    if (window.ResizeObserver) new ResizeObserver(function () { var hh = $('#hdr').offsetHeight + 'px'; if (document.documentElement.style.getPropertyValue('--hdr') !== hh) { document.documentElement.style.setProperty('--hdr', hh); fhSchedule(); } }).observe($('#hdr'));
     bind();
     AUTH.start(onReady, { gate: showGate, busy: showBusy });
   });
-  window.STATUS_APP = { go: go, back: back, drillTo: drillTo, state: S, fhUpdate: fhUpdate, openSec: function (id) { openSec(id); }, tree: function () { return TREE; }, me: function () { return ME; }, kept: function () { return Object.keys(DATA).filter(function (c) { return DATA[c] && DATA[c].tree; }).length; }, dict: function () { return DICT; }, busy: function () { return !!(TREE_P || W32_P) || PEND > 0; }, gliding: function () { return !!glStop; },   // busy＝店の木・3-2 の数を裏で受け取っている最中（試験が、届いた後の描き直しと押すのが重ならないように待つ）
+  window.STATUS_APP = { go: go, back: back, fromBack: fromBack, from: function () { var f = S.from && FROMS[S.from]; return f ? f.nm : ''; }, place: placeName, guide: { open: openGuide, ready: function () { return !!GD.html; }, go: gdGo, here: function () { return GD.here; }, prof: function () { var t0 = performance.now(); GD.cache = ''; var c = gdPrepared(), t1 = performance.now(); return { prep: t1 - t0, bytes: c.length }; } }, histLen: function () { return HIST.length; }, drillTo: drillTo, state: S, fhUpdate: fhUpdate, openSec: function (id) { openSec(id); }, tree: function () { return TREE; }, me: function () { return ME; }, kept: function () { return Object.keys(DATA).filter(function (c) { return DATA[c] && DATA[c].tree; }).length; }, dict: function () { return DICT; }, busy: function () { return !!(TREE_P || W32_P) || PEND > 0; }, gliding: function () { return !!glStop; },   // busy＝店の木・3-2 の数を裏で受け取っている最中（試験が、届いた後の描き直しと押すのが重ならないように待つ）
     find: function (q) { var i = $('#q1'); i.value = q; search(i, $('#r1')); return $$('#r1 button[data-hit]').map(function (b) { return b.textContent; }); } };
 })();
