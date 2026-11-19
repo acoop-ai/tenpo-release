@@ -852,5 +852,56 @@ a.chip:hover{background:var(--brand2);border-color:var(--brand)}
 /* 11/18 s1118a（画面の既定の点検 項目5）: 探す欄・次の一手を、本文の幅いっぱいの横長にしない（盤面を広く使う≠横長の UI） */
 #hsearch{flex:0 1 440px}
 main .nx{width:fit-content;max-width:min(100%,72em)}
+/* 11/18 s1118b: 雨の日の効きの確かさ（主の数＝値＋確かさのひとこと・段は分析レポート 3-2 と同じ: はっきり＝塗り・傾向＝枠だけ・まだ分からない＝点線の枠と小さな数） */
+.drill.wxd .drow{grid-template-columns:minmax(8em,15em) 8.4em minmax(160px,540px) minmax(7em,12.5em)}
+.drow .pct.wxp{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;line-height:1.15;gap:2px}
+.drow .pct.wxp b{font-weight:800}
+.drow .pct.wxp b.wk,.tile .v small.wk{font-size:12.5px;font-weight:600;color:#475569}
+.cf,.cfc{display:inline-block;font-size:11.5px;font-weight:700;line-height:1.35;border-radius:4px;padding:0 5px;white-space:nowrap;color:#1f2933;font-variant-numeric:tabular-nums}
+.cf.t0,.cfc.t0{background:#dfe8f5;color:#0b3a7e}
+.cf.t1,.cfc.t1{background:#fff;border:1px solid #64748b;color:#334155}
+.cf.t2,.cfc.t2{background:#fff;border:1px dashed #64748b;color:#475569}
+.cf.cfn,.cf.cfl{color:#475569;font-weight:600;padding:0}
+.drow .bar.nb{display:flex;align-items:center}
+.drill .drow:not(.ruler) .bar.nb{background:none}
+.bar.nb em{font-style:normal;font-size:12px;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cfli{margin:6px 0 2px 1.2rem;padding:0;font-size:13.5px;line-height:1.7}
+.tile .v.wkv{white-space:normal}
+.tile .v.wkv small:last-child{display:block;margin:0;font-size:15px;color:#334155}
+@media (max-width:760px){
+ .drill.wxd .drow{grid-template-columns:minmax(0,1fr) auto}
+ .bar.nb em{white-space:normal;font-size:11.5px}
+ .drill .drow:not(.ruler) .bar.nb{height:auto;min-height:16px}
+}
+/* 11/18 s1118b: 52週MD の行（主の数＝下回った回／その行の回〈赤い字〉→ 棒〈左から 下回った → 並み → 上回った〉→ 上回った回／その行の回〈青い字〉） */
+.drill.mdd .drow{grid-template-columns:minmax(8em,15em) 6.6em minmax(160px,540px) minmax(9em,16em)}
+.drow .pct.mdn b,.drow .pct.mdn small{color:#b42318}
+.drow .pct.mdn small{font-size:11.5px;font-weight:700}
+.drow .val.mup{color:#1d4f9c;font-weight:600}
+.hint.mdsum{margin:2px 0 6px}
+@media (max-width:760px){.drill.mdd .drow{grid-template-columns:minmax(0,1fr) auto}}
+.drill.wxd .grp small{font-size:12.5px;color:#334155}
+/* 11/18 s1118b: 利用ガイドの模式図（雨の日の効きの確かさ・52週MD の行の向き）＝画面と同じ形 */
+.guide2 .mk-row.cfr,.guide2 .mk-row.mdr{grid-template-columns:minmax(0,9em) 7.4em minmax(70px,1fr) auto}
+.guide2 .mk-row .rp.wxp{display:flex;flex-direction:column;align-items:flex-end;line-height:1.15;gap:1px}
+.guide2 .mk-row .rp.wxp b.wk{font-size:12.5px;font-weight:600;color:#475569}
+.guide2 .mk-row .rp.mdn b,.guide2 .mk-row .rp.mdn small{color:#b42318}
+.guide2 .mk-row .rp.mdn small{font-size:11.5px}
+.guide2 .mk-row .ra.mup{color:#1d4f9c;font-weight:600}
+.guide2 .mk-row .rb i.u.t1{background:#e3ecf8;border:2px solid #5b8fd6}.guide2 .mk-row .rb i.d.t1{background:#fbe7e4;border:2px solid #e07a6e}
+.guide2 .mk-row .rb i.u.t2{background:transparent;border:2px dashed #a9c2e8}.guide2 .mk-row .rb i.d.t2{background:transparent;border:2px dashed #eeb3ab}
+.guide2 .mk-row .rb.nb{background:none;display:flex;align-items:center;height:auto}
+.guide2 .mk-row .rb.nb em{font-style:normal;font-size:12.5px;color:#475569}
+.guide2 .mk-row .rb.md i.fl{background:#cbd5e1}
+.guide2 .mk-lg i.lt0,.guide2 .mk-lg i.lt1,.guide2 .mk-lg i.lt2{display:inline-block;width:16px;height:11px;border-radius:2px;margin-left:6px}
+.guide2 .mk-lg i.lt0{background:#e07a6e}.guide2 .mk-lg i.lt1{background:#fbe7e4;border:2px solid #e07a6e}.guide2 .mk-lg i.lt2{border:2px dashed #eeb3ab}
+.guide2 .mk-grp{display:block;font-size:13px;font-weight:800;color:#0b3a7e;background:#f3f6fa;border-radius:5px;padding:2px 6px;margin-left:calc(var(--dep,0) * 16px)}
+.guide2 .mk-grp small{font-weight:600;color:#334155;margin-left:4px}
+.guide2 .mk-lg{flex-wrap:wrap}
+@media (max-width:760px){.guide2 .mk-row.cfr,.guide2 .mk-row.mdr{grid-template-columns:minmax(0,6.5em) 6.6em minmax(48px,1fr)}}
+/* 11/18 s1118b（画面の既定の点検 項目8・375）: 店のいまの「ほかの店と比べる」の表は、左の列の字が長く（雨の日の来客 など）、幅 375 で左の列が枠の 76% になり、横に送ると数が見えなかった → 左の列を折り返して 11em まで */
+@media (max-width:760px){#d-cmp table.t th:first-child,#d-cmp table.t td:first-child{white-space:normal;min-width:7em;max-width:11em}}
+.guide2 .mk-row.mdr{grid-template-columns:minmax(4.5em,9em) 5.6em minmax(60px,1fr) auto}
+.guide2 .mk-lg>span{white-space:nowrap}
 
-:root{--css-build:"status-web-2026-11-18a"}
+:root{--css-build:"status-web-2026-11-18b"}

@@ -491,7 +491,7 @@ var STORE_ORDER = [
     if (an === 'wx') { var w = ov.wx && ov.wx[m === 'q' ? 'a' : m], v = w ? mapNum(w[S.wl]) : NaN, o = w ? mapNum(w[1 - S.wl]) : NaN; return isFinite(v) ? { d: v, t: sg(v) + '%', t2: isFinite(o) ? (S.wl ? '雨 ' : '強い雨 ') + sg(o) + '%' : '' } : null; }
     if (an === 'ad') { var a = ov.ad; return a && isFinite(mapNum(a.L)) ? { d: a.L, t: num(a.L, 2) + '倍', t2: '比べた ' + num(a.nc) + '件' } : null; }
     if (an === 'ls') { var l = mapNum(x.ls); return isFinite(l) ? { d: l, t: num(l, 1) + '%', t2: '' } : null; }
-    if (an === 'md') { var f = ov.md; return f && f.n ? { d: f.down / f.n * 100, f: f, t: f.down + '/' + f.n + '回', t2: '上回った ' + f.up + '回' } : null; }
+    if (an === 'md') { var f = ov.md; return f && f.n ? { d: f.down / f.n * 100, f: f, t: '下回った ' + f.down + '/' + f.n + '回', t2: '上回った ' + f.up + '/' + f.n + '回・並み ' + f.flat } : null; }
     if (an === 'tm') {
       var dw = ov.dw && (ov.dw[m] || ov.dw.a), hp = ov.hp; if (!dw) return null;
       var hi = maxAt(dw), lo = minAt(dw), ph = maxAt(hp || []);
@@ -503,10 +503,13 @@ var STORE_ORDER = [
   function treeLens(n, an, m) {
     if (!n) return null;
     if (an === 'yo') { var yy = m === 'a' ? n.yo : (n.mt && n.mt[m] ? n.mt[m].yo : NaN); if (!(isFinite(yy) && yy > 0)) return null; var vv = mval(n, m); return { d: pct(yy), t: sg(pct(yy)) + '%', t2: isFinite(vv) ? num(vv, m === 'a' ? 1 : 0) + MK[m].u : '' }; }
-    if (an === 'wx') { var W = n.wxs && n.wxs[m === 'q' ? 'a' : m], w = W && W[S.wl], o = W && W[1 - S.wl]; return w && isFinite(w[0]) ? { d: w[0], t: sg(w[0]) + '%', t2: o && isFinite(o[0]) ? (S.wl ? '雨 ' : '強い雨 ') + sg(o[0]) + '%' : '' } : null; }
+    if (an === 'wx') {   // s1118b: 店の木の数には確かさ（vx）がある＝店のいまと同じ主の数・棒（塗り・枠・点線）
+      var mw = m === 'q' ? 'a' : m, c = wxCf(n, mw, S.wl), o = wxCf(n, mw, 1 - S.wl);
+      return c && isFinite(c.v) ? { wx: true, c: c, d: c.v, t: sg(c.v) + '%', t2: o && isFinite(o.v) ? (S.wl ? '雨 ' : '強い雨 ') + sg(o.v) + '%' + (o.t >= 0 ? '・' + CFW[o.t] : '') : '' } : null;
+    }
     if (an === 'ad') { var a = n.ad; return a && isFinite(a.L) ? { d: a.L, t: num(a.L, 2) + '倍', t2: '比べた ' + num(a.nc) + '件' } : null; }
     if (an === 'ls') return n.ls && isFinite(n.ls[2]) ? { d: n.ls[2], t: num(n.ls[2], 1) + '%', t2: '' } : null;
-    if (an === 'md') { var f = n.m5; return f && f.n ? { d: f.down / f.n * 100, f: f, t: f.down + '/' + f.n + '回', t2: '上回った ' + f.up + '回' } : null; }
+    if (an === 'md') { var f = n.m5; return f && f.n ? { d: f.down / f.n * 100, f: f, t: '下回った ' + f.down + '/' + f.n + '回', t2: '上回った ' + f.up + '/' + f.n + '回・並み ' + f.flat } : null; }
     if (an === 'tm') {
       var dw = (m === 'a' ? n.dw : (n.dwm && n.dwm[m])) || n.dw; if (!dw) return null;
       var H = n.h && (n.h[m === 'u' ? 'a' : m] || n.h.a), tot = [];
@@ -533,7 +536,7 @@ var STORE_ORDER = [
     }
     if (an === 'md') {
       var f = { n: 0, up: 0, flat: 0, down: 0 }; xs.forEach(function (x) { var g = x.ov && x.ov.md; if (g && g.n) ['n', 'up', 'flat', 'down'].forEach(function (k) { f[k] += g[k] || 0; }); });
-      return f.n ? { d: f.down / f.n * 100, f: f, t: f.down + '/' + f.n + '回' } : null;
+      return f.n ? { d: f.down / f.n * 100, f: f, t: '下回った ' + f.down + '/' + f.n + '回' } : null;
     }
     if (an === 'tm') {
       var L = xs.map(function (x) { return mapLens(x, 'tm', m); }).filter(Boolean); if (!L.length) return null;
@@ -584,8 +587,8 @@ var STORE_ORDER = [
     }
     if (an === 'wx') {
       return { r: WL[S.wl] + 'の日の' + mn(m === 'q' ? 'a' : m) + 'は、店の中央で、ふだんの同じ曜日より ' + (mapAgg(stores, 'wx', m, d) || { t: '―' }).t + '。' + arl + ar + '（店の中央）。いちばん落ちるのは' + w.s.nm + '（' + w.v.t + '）、落ちにくいのは' + b.s.nm + '（' + b.v.t + '）。',
-        y: '全店の分析では、雨の日は重い物・かさばる物・急がない物が後回しにされやすい。店の差は、まわりの様子（車で来る店か、歩き・自転車で来る店か）でも変わる。どれかは、記録だけでは見分けられない。',
-        s: '落ちの大きい店から、雨の予報の日の作る量・発注・並べ方を見直す（店を押すと、その店の雨の日の効きを、部門・中分類まで掘れる）。どこまで減らすかは、売場で確かめてから決める。', w: w };
+        y: '考えられる原因（1つには決められない）: ①来客そのものが減る ②重い物・かさばる物・急がない物が後回しにされる ③まわりの様子（車で来る店か、歩き・自転車で来る店か）④雨の日の品ぞろえ・並べ方・作る量。どれかは、記録だけでは見分けられない。',
+        s: '落ちの大きい店から、その店の雨の日の効きを、部門 → 中分類 → クラスまで確かさつきで見る（店を押すと、すぐ下に開く）。作る量・発注・並べ方は、その店で「はっきり」減る分類から、売場で小さく試して確かめる（ほかの店や全店の傾向に合わせるのではない）。', w: w };
     }
     if (an === 'ad') {
       return { r: '特売の日の販売数は、店の中央で、ふだんの ' + (mapAgg(stores, 'ad', m, d) || { t: '―' }).t + '。' + arl + ar + '。よく効くのは' + b.s.nm + '（' + b.v.t + '）、効きにくいのは' + w.s.nm + '（' + w.v.t + '）。',
@@ -664,12 +667,11 @@ var STORE_ORDER = [
     return h;
   }
   /** 分析ごとの、店のデータで数のある深さ（店の木の段 lv）と理由（PO 11/18「部門の下にまだドリルダウンできない」）。
-   *  広告の効き・52週MD＝部門まで（部門の下は、その部門でよく効いた品／その部門の回）。雨の日の効き＝中分類まで（クラスは天気と売れ方の店ごとの違いで）。ほか＝クラスまで */
-  function anDepth(an) { return an === 'ad' || an === 'md' ? 1 : an === 'wx' ? 2 : 4; }
+   *  広告の効き・52週MD＝部門まで（部門の下は、その部門でよく効いた品／その部門の回）。ほか（雨の日の効きも s1118b から）＝クラスまで */
+  function anDepth(an) { return an === 'ad' || an === 'md' ? 1 : 4; }   // 雨の日の効きも、クラスまで（s1118b・店の木に 3-2 の数がクラスまである）
   function anLimit(an) {
     return { ad: '広告の効きは、店のデータでは部門まで（中分類・クラスの数は無い）。部門の下は、その部門でよく効いた品です。',
-      md: '52週MD は部門ごとの計画なので、部門まで（部門の下は、その部門の回）。',
-      wx: '雨の日の効きは、店のデータでは中分類まで（クラスの数は、天気と売れ方の「店ごとの違い」でクラスまで見られます）。' }[an] || '';
+      md: '52週MD は部門ごとの計画なので、部門まで（部門の下は、その部門の回）。' }[an] || '';
   }
   /** 部門の下に出す物: 広告＝よく効いた品（増えた実売上の多い順）／52週MD＝その部門の回（新しい順）。行は押せない（いちばん下） */
   function anItems(an, n, dep) {
@@ -714,8 +716,8 @@ var STORE_ORDER = [
       bar = function (v) { return oneBar(v.d, R, co ? co.d : NaN); }; tk = [[0, '0%'], [50, (R / 2) + '%'], [100, R + '%']];
       lg = '<span>ロスの計（売上に対する %）</span><span><i style="background:#e07a6e"></i>全社より多い</span><span><i style="background:#5b8fd6"></i>少ない</span>';
     } else if (an === 'md') {
-      bar = function (v) { return mdBar(v.f); }; tk = [[0, '0%'], [50, '50%'], [100, '100%（回の数）']];
-      lg = '<span>52週MD の回の結果（計画と比べた回の割合）・数＝下回った回／全部の回</span><span><i style="background:#5b8fd6"></i>上回った</span><span><i style="background:#cbd5e1"></i>並み</span><span><i style="background:#e07a6e"></i>下回った</span>';
+      bar = function (v) { return mdBar(v.f); }; tk = [[0, '0%'], [50, '50%'], [100, '100%（その行の回）']];
+      lg = MD_LG.replace('</span>', '・行の回を足すと、上の段の回</span>');
     } else {
       var mt = 0.1; ok.concat(areaV.filter(function (o) { return o.v; }).map(function (o) { return { v: o.v }; })).forEach(function (r) { r.v.dw.forEach(function (y) { if (isFinite(y)) mt = Math.max(mt, Math.abs(y - 1)); }); });
       mt = Math.min(mt, 0.5);
@@ -723,9 +725,11 @@ var STORE_ORDER = [
       lg = '<span>曜日の形（月→日・ふだん＝1.00 の線から上下・棒の端 ±' + Math.round(mt * 100) + '%）</span><span><i style="background:#5b8fd6"></i>ふだんより多い</span><span><i style="background:#e07a6e"></i>少ない</span><span><i style="background:rgba(234,138,40,.25)"></i>土日</span>';
     }
     lg = '<div class="lg"><span>' + esc(nm0) + '</span>' + lg + (co && an !== 'md' && an !== 'tm' ? '<span><i style="border-left:2px dashed #7c3aed;width:0"></i>全社' + (an === 'yo' || an === 'ls' ? '' : '（店の中央）') + ' ' + esc(co.t) + '</span>' : '') + (R ? '<span>目盛りの端 ' + (an === 'ls' ? R + '%' : an === 'ad' ? num(1 + R, 1) + '倍' : '±' + R + '%') + '</span>' : '') +
-      asideLg({ yo: mn(m) + (m === 'u' ? '' : '（1日あたり）'), wx: '比べる用・' + WL[1 - S.wl] + 'の日の値', ad: '比べた特売の件数', md: '上回った回の数', tm: '客がいちばん多い時刻' }[an]) + '</div>';
+      asideLg({ yo: mn(m) + (m === 'u' ? '' : '（1日あたり）'), wx: '比べる用・' + WL[1 - S.wl] + 'の日の値', ad: '比べた特売の件数', md: '上回った回／その行の回・並み', tm: '客がいちばん多い時刻' }[an]) + '</div>';
     // 行の並び（PO 11/17）: 名前 → 主の数 → 棒 が一つのかたまり。比べる用の添えは右の端に、かっこ付きで
     var cells = function (v) {
+      if (v && v.wx) return wxPct(v.c) + wxBar(v.c, R, co ? co.d : NaN) + '<span class="val">' + esc(aside(v.t2)) + '</span>';   // 店の木の数（確かさつき・s1118b）
+      if (v && an === 'md' && v.f) return mdPct(v.f) + mdBar(v.f) + mdVal(v.f);   // 52週MD（s1118b）: 下回った回（赤）→ 棒（左から 下回った → 並み → 上回った）→ 上回った回（青）
       return '<span class="pct ' + (v && an !== 'tm' ? cl(v) : '') + '">' + esc(v ? (an === 'tm' ? (v.hi >= 0 ? v.t + 'が多い' : '―') : v.t) : '―') + '</span>' +
         (v ? bar(v) : '<span class="bar" aria-hidden="true"></span>') + '<span class="val">' + esc(v ? aside(v.t2) : '') + '</span>';
     };
@@ -752,7 +756,7 @@ var STORE_ORDER = [
         var key = s.c + ':' + x.id, can = hasKids(x.n), op = can && !!O[key], v = treeLens(x.n, an, m), dpn = deptOfT(x.n, T.N), c = dpn ? deptCol(dpn.n) : null;
         out += subRow(esc(x.n.n), v, can ? ' data-mtog="' + esc(key) + '" aria-expanded="' + op + '" title="押すと、すぐ下に' + esc(x.n.n) + 'の中が開きます（もう一度押すと閉じる）"' : '',
           (c ? ' dc' : '') + (v ? '' : ' nodp') + (op ? ' open' : ''), dcStyleT(x.n, T.N, dep), can ? (op ? '▼' : '▶') : '・');
-        if (op) out += treeRows(s, x.n, T, dep + 1) + (an === 'wx' && x.n.lv === 2 ? '<div class="hint lim" style="--dep:' + (dep + 1) + '">' + esc(anLimit('wx')) + '</div>' : '');
+        if (op) out += treeRows(s, x.n, T, dep + 1) + (an === 'wx' && x.n.lv === 2 ? '<div class="hint lim" style="--dep:' + (dep + 1) + '">' + esc(WX_BAND) + '</div>' : '');
       });
       return out;
     };
@@ -760,7 +764,8 @@ var STORE_ORDER = [
       var dd = DATA[s.c] || {}, T = dd.tree;
       if (!T && !dd.p && !dd.none && !dd.err) { fetchTree(s.c); dd = DATA[s.c] || dd; }   // 店の行を開いたら、その店の木を裏で受け取り始める
       return mapDl(M).filter(function (x) { return !x.alt; }).map(function (x) {
-        var c = deptCol(x.n), v = s.dp && s.dp[x.id] ? mapLens(s.dp[x.id], an, m) : null, key = s.c + ':' + x.id, tn = T ? T.N[x.id] : null;
+        var c = deptCol(x.n), key = s.c + ':' + x.id, tn = T ? T.N[x.id] : null;
+        var v = an === 'wx' && tn && tn.wxs ? treeLens(tn, an, m) : s.dp && s.dp[x.id] ? mapLens(s.dp[x.id], an, m) : null;   // 雨の日の効き: 店の木が届いたら、部門の行も木の数（地図と同じ数＋確かさ）
         var can = T ? !!(tn && hasKids(tn)) : !!(s.dp && s.dp[x.id]) && !dd.none, op = can && !!O[key];   // 木が届く前も押せる（届いたら、そこに開く）
         var h = subRow(esc(x.n), v, can ? ' data-mtog="' + esc(key) + '" aria-expanded="' + op + '" title="押すと、すぐ下に' + esc(s.nm + 'の' + x.n) + 'の中分類が開きます（もう一度押すと閉じる）"' : '',
           (c ? ' dc' : '') + (v ? '' : ' nodp') + (op ? ' open' : ''), (c ? '--dbg:' + c[0] + ';--dac:' + c[1] + ';' : '') + '--dep:1', can ? (op ? '▼' : '▶') : '・');
@@ -777,7 +782,7 @@ var STORE_ORDER = [
         '<div class="dopen" style="--dep:1"><button type="button" data-store="' + esc(s.c) + '" data-sdep="' + esc(sd) + '">' + esc(s.nm + 'の' + dn) + 'を大きく開く（AI のコメント・この段の図）▸</button></div>';
     };
     var inPlace = true;   // 全店のいまも、部門ごとの「店ごとの違い」も、その場で開く（PO 11/18「部門の下にまだドリルダウンできない」）
-    var a1 = '<h3 class="mh">エリアの比較 — ' + esc(nm0) + (an === 'yo' || an === 'ls' ? '（エリアの店を合わせた計）' : '（エリアの店の中央）') + '</h3><div class="drill an">' + lg + (tk ? ruler(tk.filter(function (x) { return x[1]; })) : '') +
+    var a1 = '<h3 class="mh">エリアの比較 — ' + esc(nm0) + (an === 'yo' || an === 'ls' ? '（エリアの店を合わせた計）' : '（エリアの店の中央）') + '</h3><div class="drill an' + (an === 'md' ? ' mdd' : an === 'wx' ? ' wxd' : '') + '">' + lg + (tk ? ruler(tk.filter(function (x) { return x[1]; })) : '') +
       areaV.map(function (o) {
         var on = arn && o.a.nm === arn, key = 'A:' + o.a.nm, op = !d && !!O[key], nm = esc(o.a.nm) + ' <small>' + o.a.stores.length + '店</small>' + (on ? ' <small class="arsel">見る範囲</small>' : '');
         if (d) return rowHtml(nm, '', o.v, '', ' area' + (on ? ' sel' : ''));   // 部門を選んでいるときは、エリアの行が その部門（下は店の行から）
@@ -786,7 +791,7 @@ var STORE_ORDER = [
           '<div class="hint lim" style="--dep:1">エリアの見方は部門まで（エリアの中分類・クラスの数は無い）。中分類 → クラスは、下の店の比較で店の行から掘れます。</div>';
         return h;
       }).join('') + '</div>';
-    var a2 = '<h3 class="mh">店の比較（' + (arn ? esc(arn) : 'エリアごと') + '・' + '店の並び（正の順）' + '）<small>' + (dn ? (inPlace ? '行を押すと、すぐ下にその店の' + esc(dn) + 'の中分類が開きます（中分類 → クラスも、押すたびにすぐ下に）' : '行を押すと、その店の' + esc(dn) + 'の' + esc(AN[an]) + 'が開きます') : '行を押すと、すぐ下にその店の部門が開きます（部門 → 中分類 → クラスも、押すたびにすぐ下に）') + '</small></h3><div class="drill an">' + lg + (tk ? ruler(tk.filter(function (x) { return x[1]; })) : '');
+    var a2 = '<h3 class="mh">店の比較（' + (arn ? esc(arn) : 'エリアごと') + '・' + '店の並び（正の順）' + '）<small>' + (dn ? (inPlace ? '行を押すと、すぐ下にその店の' + esc(dn) + 'の中分類が開きます（中分類 → クラスも、押すたびにすぐ下に）' : '行を押すと、その店の' + esc(dn) + 'の' + esc(AN[an]) + 'が開きます') : '行を押すと、すぐ下にその店の部門が開きます（部門 → 中分類 → クラスも、押すたびにすぐ下に）') + '</small></h3><div class="drill an' + (an === 'md' ? ' mdd' : an === 'wx' ? ' wxd' : '') + '">' + lg + (tk ? ruler(tk.filter(function (x) { return x[1]; })) : '');
     M.areas.forEach(function (a) {
       if (arn && a.nm !== arn) return;   // 見る範囲のエリアの店だけ
       a2 += '<div class="grp">' + esc(a.nm) + '</div>';
@@ -1019,7 +1024,7 @@ var STORE_ORDER = [
   function metricBar(n) {
     if (!AN_M[S.an]) return '<div class="msel"><span class="lb">見る数</span><span class="hint" style="margin:0">「' + esc(AN[S.an]) + '」は、決まった数で見ます（見る数の切り替えはありません）</span></div>';
     return '<div class="msel" role="group" aria-label="見る数"><span class="lb">見る数</span>' + ['a', 'q', 'c', 'u'].map(function (k) { return '<button type="button" data-m="' + k + '" aria-pressed="' + (S.m === k) + '">' + esc(mname(k, n)) + '</button>'; }).join('') +
-      '<span class="hint" style="margin:0">札・AI のコメント・掘り下げ・図が、この数の前年比（直近4週）に替わります</span></div>';
+      '<span class="hint" style="margin:0">札・AI のコメント・掘り下げ・図が、' + (S.an === 'wx' ? 'この数の雨の日の差（ふだんの同じ曜日との差）' : S.an === 'tm' ? 'この数の曜日・時間帯' : 'この数の前年比（直近4週）') + 'に替わります</span></div>';
   }
   /** 掘り下げの棒の物差し（棒の列にそろえる・PO 11/16「スケールが分かりづらい」）。ticks: [[位置 0〜100, 字], …] */
   function ruler(ticks) {
@@ -1065,6 +1070,51 @@ var STORE_ORDER = [
   var AN_M = { yo: 1, wx: 1, tm: 1 };
   var WL = ['雨（10mm 以上）', '強い雨（30mm 以上）'];
   function wxv(n, i) { var W = n.wxs && n.wxs[S.m], w = W && W[i]; return w && isFinite(w[0]) ? w : null; }   // [この段, 同じ型の店の中央, エリアの中央, エリアで何番目, 店の数]
+  // ── 雨の日の確かさ（s1118b・PO 11/18「その結果の効きがどのぐらいの可能性なのか」）。数も決まりも、分析レポート「売れ方・ロス・天気の分析」の 3-2 と、
+  //   天気と売れ方の店ごとの違い（w32Block）と同じ1か所:
+  //   数＝店の木の vx（指南書の道具 sg_build が、3-2 の図のデータから店〜クラスの行を写した物。V12・V13 の 3-2 と全部の行が同じ）。
+  //     vx＝4つの組〔0 雨・売上／1 雨・来客数／2 強い雨・売上／3 強い雨・来客数〕×〔効き%, 確かさ, 1人あたり%, 確かさ〕。確かさ＝0〜99（%・99＝99%以上）・101〜103＝中分類の売上の幅（95%未満・95〜99%・99%以上）
+  //   段: 0＝はっきり（95%以上・塗った棒）・1＝傾向（70〜95%・枠だけ。中分類の「95%未満」もここ＝3-2 と同じ）・2＝まだ分からない（たまたまの範囲・70%未満・点線の枠。数は小さく）
+  var CF_LINE = 95, CF_LOW = 70, CFW = ['はっきり', '傾向', 'まだ分からない'];
+  var WX_BAND = 'クラスは、雨の日の数が少ないため、数字の多くは参考です（確かさ 95% 以上だけが塗った棒）。';   // 3-2 の図の帯と同じ言葉
+  function cfTier(k) { if (k === null || k === undefined) return 2; if (k > 100) return k === 101 ? 1 : 0; return k >= CF_LINE ? 0 : k >= CF_LOW ? 1 : 2; }
+  function cfPct(k) { return k === null || k === undefined ? '—' : k > 100 ? ['95%未満', '95〜99%', '99%以上'][k - 101] : k >= 99 ? '99%以上' : k + '%'; }
+  /** 見る数ごとの雨の日の値と確かさ（m＝a 売上・c 来客数〈部門より下＝買った人の数〉・u 単価〈店＝客単価・部門より下＝1人あたり売上〉・q 販売数〈＝買った人の数 × 1人あたり点数〉。wl＝0 雨・1 強い雨）。
+   *  返す: null＝この段は数えていない（3-2 に行が無い＝売れた日が少ない など）／{ v（%）, t（段 0〜2・-1＝確かさを読み込み中）, k（確かさの字）, few（値が無い＝雨の日が少なくて、まだ分からない）, w（物差しの組） } */
+  function wxCf(n, m, wl) {
+    if (!n || !n.wxs) return null;
+    var W = n.wxs[m], w = W && W[wl], v = w && w[0] !== null && w[0] !== undefined && isFinite(w[0]) ? w[0] : NaN;
+    if (!isFinite(v)) return n.vx || W ? (wl === 1 ? { v: NaN, t: 2, k: '—', few: true, w: null } : null) : null;   // 強い雨で値が無い＝強い雨の日が少ない（3-2: 2日以下は数えない）／雨で無い＝数えていない（売れた日が少ない など）
+    if (!n.vx) return { v: v, t: -1, k: '', w: w };   // 要約（店の木が届く前）には確かさが無い
+    var g = n.vx[(m === 'c' || m === 'q' ? 1 : 0) + 2 * wl] || [];
+    if (m === 'q') { var t = Math.max(cfTier(g[1]), cfTier(g[3])); return { v: v, t: t, k: '買った人 ' + cfPct(g[1]) + '・1人あたり点数 ' + cfPct(g[3]), q: g, w: w }; }   // 販売数＝2つの数の掛け算。確かさは低いほうの段
+    var kk = g[m === 'u' ? 3 : 1];
+    return { v: v, t: cfTier(kk), k: cfPct(kk), w: w };
+  }
+  /** 主の数（名前のすぐ右）: 値と、確かさの段のひとこと。「まだ分からない」の値は小さく灰色で（効きの数を大きく見せない） */
+  function wxPct(c) {
+    if (!c) return '<span class="pct wxp"><b class="wk">―</b><small class="cf cfn">数えていない</small></span>';
+    if (c.few) return '<span class="pct wxp"><b class="wk">―</b><small class="cf t2">まだ分からない</small></span>';
+    var t = c.t, sv = sg(c.v) + '%';
+    return '<span class="pct wxp ' + (t === 2 ? '' : cls(c.v)) + '"><b' + (t === 2 ? ' class="wk"' : '') + '>' + (t === 2 ? '（' + sv + '）' : sv) + '</b>' +
+      (t < 0 ? '<small class="cf cfl">確かさは読み込み中</small>' : '<small class="cf t' + t + '">' + CFW[t] + (c.q ? '' : ' ' + esc(c.k)) + '</small>') + '</span>';
+  }
+  /** 行の説明（矢印を合わせたとき・読み上げ）: 数と確かさの段と、その意味 */
+  function wxTip(c, wl) {
+    if (!c) return 'この分類は、雨の日の差を数えていません（売れた日が少ない など）';
+    if (c.few) return WL[wl] + 'の日が少なくて、まだ分からない（強い雨の日が2日以下の分類は数えていない）';
+    return WL[wl] + 'の日 ' + sg(c.v) + '%｜' + (c.t < 0 ? '確かさは読み込み中' : CFW[c.t] + '（確かさ ' + c.k + '）' + (c.t === 2 ? '＝たまたまの範囲。いまの雨の日の数では、ふだんとの差か、たまたまかを見分けられない' : c.t === 1 ? '＝傾向。言い切れる差ではない' : '＝ふだんの揺れでは説明できない差'));
+  }
+  /** 棒（同じ0線・同じ目盛り）: 塗り・枠・点線＝確かさの段。数の無い行は、棒の場所に理由を字で */
+  function wxBar(c, R, ref) {
+    if (!c) return '<span class="bar nb" aria-hidden="true"><em>雨の日の差を数えていない分類（売れた日が少ない など）</em></span>';
+    if (c.few) return '<span class="bar nb" aria-hidden="true"><em>雨の日が少なくて、まだ分からない</em></span>';
+    return w32Bar(c.v, R, isFinite(ref) ? ref : null, c.t < 0 ? 0 : c.t, null, null);
+  }
+  /** 数の元のひとこと（店の方には、本部だけの画面・レポートの名前を出さない＝利用ガイドの店の節と同じ決まり） */
+  function WX_SAME() { return ME && (ME.role === 'hq' || ME.role === 'admin') ? '行の数と確かさは、分析レポート「売れ方・ロス・天気の分析」の 3-2 と、天気と売れ方の店ごとの違いと同じです' : '行の数と確かさは、本部が雨の日の分析で見ている物と同じ数・同じ決まりです'; }
+  /** 凡例（棒の塗り・枠・点線＝確かさ・1行で）。3-2 と同じ境目 */
+  var WX_LG = '<span><i class="lgt"></i>はっきり（確かさ 95%以上）</span><span><i class="lgt t1"></i>傾向（70〜95%）</span><span><i class="lgt t2"></i>まだ分からない（たまたまの範囲・70%未満・数は小さく）</span>';
   function dwOf(n) { return S.m === 'a' ? n.dw : (n.dwm && n.dwm[S.m]); }
   function dayNm(i) { return i === 7 ? '祝日' : DOW8[i] + '曜'; }
   function maxAt(a) { var k = -1; (a || []).forEach(function (v, i) { if (isFinite(v) && (k < 0 || v > a[k])) k = i; }); return k; }
@@ -1079,9 +1129,14 @@ var STORE_ORDER = [
     var o = [], m = S.m, p = mpr(n, m), d = myo(n, m), v = mval(n, m), oth = ['a', 'c', 'u'].filter(function (k) { return k !== m; });
     o.push({ an: 'yo', nm: mname(m, n) + 'の前年比', u: MK[m].u, v: num(v, m === 'a' && v < 100 ? 1 : 0), yy: d, g: d, gm: p ? (isFinite(p.peer) ? p.peer : p.area) : NaN, rule: p ? ruleTxt(p.peer, p.area, p.rank, p.n) : '',
       sub2: oth.map(function (k) { return mname(k, n) + ' ' + sg(myo(n, k)) + '%'; }).join('・'), sel: S.an === 'yo' });
-    var w1 = wxv(n, 1), w0 = wxv(n, 0), wm = w1 || w0;
-    o.push({ an: 'wx', nm: '雨の日の効き', u: mname(m, n), v: wm ? sg(wm[0]) + '<small>%</small>' : '―', sub: wm ? (w1 ? '強い雨の日' : '雨の日') + '・ふだんの同じ曜日との差' : 'この段には雨の日の数がありません',
-      sub2: w1 && w0 ? '雨（10mm〜）の日 ' + sg(w0[0]) + '%' : '', g: wm ? wm[0] : null, gm: wm && !nc() ? (isFinite(wm[1]) ? wm[1] : wm[2]) : NaN, rule: wm ? ruleTxt(wm[1], wm[2], wm[3], wm[4]) : '', sel: S.an === 'wx' });
+    // 雨の日の効き（s1118b）: 主＝強い雨（無ければ雨）の値と、その確かさの段。「まだ分からない」は数を小さく・目盛りの小さな棒を出さない（効きの数を大きく見せない）
+    var c1 = wxCf(n, m, 1), c0 = wxCf(n, m, 0), cm = c1 && isFinite(c1.v) ? c1 : c0 && isFinite(c0.v) ? c0 : null, wm = cm && cm.w, cw = cm === c1 ? '強い雨の日' : '雨の日';
+    var cft = function (c) { return c.t < 0 ? '確かさは読み込み中' : CFW[c.t] + '（確かさ ' + c.k + '）'; };
+    o.push({ an: 'wx', nm: '雨の日の効き', u: mname(m, n), v: cm ? (cm.t === 2 ? '<small class="wk">（' + sg(cm.v) + '%）</small><small>まだ分からない</small>' : sg(cm.v) + '<small>%</small>') : '―',
+      vc: cm && cm.t === 2 ? 'wkv' : '',
+      sub: cm ? cw + '｜' + cft(cm) : 'この段には雨の日の数がありません',   // ふだんの同じ曜日との差（凡例・掘り下げの見出しに書く）
+      sub2: cm === c1 && c0 && isFinite(c0.v) ? '雨（10mm〜）の日 ' + sg(c0.v) + '%｜' + cft(c0) : cm === c0 && c1 && c1.few ? '強い雨（30mm〜）の日は、雨の日が少なくて、まだ分からない' : '',
+      g: cm && cm.t !== 2 ? cm.v : null, gm: wm && !nc() ? (isFinite(wm[1]) ? wm[1] : wm[2]) : NaN, rule: wm ? ruleTxt(wm[1], wm[2], wm[3], wm[4]) : '', sel: S.an === 'wx' });
     var a = n.ad && isFinite(n.ad.L) ? n.ad : null;
     o.push({ an: 'ad', nm: '広告の効き', u: '倍', v: a ? num(a.L, 2) + '<small>倍</small>' : '―', sub: a ? '特売の日の販売数 ÷ ふだん' : 'この段には広告の数がありません', sub2: a ? '載った ' + num(a.n) + '件（比べられた ' + num(a.nc) + '件）' : '', sel: S.an === 'ad' });
     var f = n.m5;
@@ -1100,14 +1155,7 @@ var STORE_ORDER = [
   function kidsWith(n, f) { if (!hasKids(n) || !kidsReady(n)) return []; return kids(n).map(function (x) { return { x: x, v: f(x.n) }; }).filter(function (o) { return o.v != null && isFinite(o.v); }); }
   function anText(n) {
     var K = KIDNM[n.lv] || 'クラス', cmp = !nc();
-    if (S.an === 'wx') {
-      var w = wxv(n, S.wl); if (!w) return null;
-      var ks = kidsWith(n, function (x) { var y = wxv(x, S.wl); return y ? y[0] : null; }).sort(function (a, b) { return a.v - b.v; });
-      return [WL[S.wl] + 'の日の' + mname(S.m, n) + 'は、ふだんの同じ曜日より ' + sg(w[0]) + '%' + (cmp && isFinite(w[1]) ? '（同じ型の店の中央 ' + sg(w[1]) + '%' + (w[3] && w[4] ? '・エリア' + w[4] + '店で' + w[3] + '番目' : '') + '）' : '') + '。' +
-        (ks.length > 1 ? K + 'ごとでは、いちばん減るのは' + ks[0].x.n.n + '（' + sg(ks[0].v) + '%）、減りにくいのは' + ks[ks.length - 1].x.n.n + '（' + sg(ks[ks.length - 1].v) + '%）。' : ''),
-        '全店の分析では、雨の日は重い物・かさばる物・急がない物が後回しにされやすい。店の差は、まわりの様子（車で来る店か、歩き・自転車で来る店か）でも変わる。どれかは、記録だけでは見分けられない。',
-        '雨の予報の日は、' + (ks.length ? ks[0].x.n.n + 'から' : '') + '作る量・発注・並べ方を見直す。どこまで減らすかは、売場で確かめてから決める。'];
-    }
+    if (S.an === 'wx') return wxText(n, K, cmp);
     if (S.an === 'ad') {
       var a = n.ad; if (!a || !isFinite(a.L)) return null;
       var ka = kidsWith(n, function (x) { return x.ad && x.ad.nc >= 5 ? x.ad.L : null; }).sort(function (p, q) { return q.v - p.v; });
@@ -1118,7 +1166,7 @@ var STORE_ORDER = [
     if (S.an === 'md') {
       var f = n.m5; if (!f || !f.n) return null;
       var km = kidsWith(n, function (x) { return x.m5 && x.m5.n ? x.m5.down / x.m5.n * 100 : null; }).sort(function (p, q) { return q.v - p.v; });
-      return ['52週MD の計画と比べた ' + f.n + '回のうち、上回った ' + f.up + '・並み ' + f.flat + '・下回った ' + f.down + '。' + (km.length > 1 ? K + 'ごとでは、下回りの割合がいちばん大きいのは' + km[0].x.n.n + '（' + Math.round(km[0].v) + '%）。' : ''),
+      return ['52週MD の計画と比べた ' + f.n + '回のうち、上回った ' + f.up + '・並み ' + f.flat + '・下回った ' + f.down + '。' + (km.length > 1 ? K + 'ごとでは、下回りの割合がいちばん大きいのは' + km[0].x.n.n + '（' + Math.round(km[0].v) + '%＝下回った ' + km[0].x.n.m5.down + '/' + km[0].x.n.m5.n + '回）。' : ''),
         '計画との差は、売場の位置・量・時期のずれのほか、天気・広告の重なりでも出る。どれかは、記録だけでは見分けられない。',
         '下回った回の多い所から、イチオシ品の売場と量を計画どおりにできたかを、下の表の回ごとに確かめる。'];
     }
@@ -1137,6 +1185,34 @@ var STORE_ORDER = [
     }
     return null;
   }
+  /** 雨の日の効きの AI のコメント（s1118b）: 確かさに合わせた言い方（はっきり＝言い切る・傾向＝言い切れない と添える・まだ分からない＝数を言い切らない）。
+   *  原因は1つに決めず並べる。全体の傾向（全店の分析）を、すること（推奨）に写さない＝目的（売場の品ぞろえを保ち、作りすぎと欠品を防ぐ）から、この店の「はっきり」の分類だけで書く */
+  function wxText(n, K, cmp) {
+    var wl = S.wl, m = S.m, c = wxCf(n, m, wl), wn = WL[wl], mn = mname(m, n);
+    if (!c) return null;
+    var w = c.w || [], r;
+    var nms = function (a) { return a.map(function (o) { return o.x.n.n + '（' + sg(o.c.v) + '%）'; }).join('・'); };
+    if (c.few) r = wn + 'の日の' + mn + 'は、雨の日が少なくて、まだ分からない（強い雨の日が2日以下の分類は数えていない）。';
+    else if (c.t === 2) r = wn + 'の日の' + mn + 'の差（' + sg(c.v) + '%）は、確かさ ' + c.k + 'で、たまたまの範囲。いまの雨の日の数では、まだ分からない。';
+    else r = wn + 'の日の' + mn + 'は、ふだんの同じ曜日より ' + sg(c.v) + '%（' + (c.t < 0 ? '確かさは読み込み中' : CFW[c.t] + '・確かさ ' + c.k + (c.t === 1 ? '。傾向で、言い切れる差ではない' : '')) + '）。';
+    if (!c.few && cmp && w[1] !== null && isFinite(w[1])) r += '同じ型の店の中央は ' + sg(w[1]) + '%' + (w[3] && w[4] ? '（エリア' + w[4] + '店で、減りの大きい方から' + w[3] + '番目）' : '') + '。';
+    if (n.lv === 0 && m === 'a') {   // 店の段の売上は、来客数と客単価に分けて（比べた相手 → 理由のすじ）
+      var cc = wxCf(n, 'c', wl), cu = wxCf(n, 'u', wl);
+      if (cc && cu && isFinite(cc.v) && isFinite(cu.v) && cc.t >= 0 && cu.t >= 0) r += '内訳は、来客数 ' + sg(cc.v) + '%（' + CFW[cc.t] + '）・客単価 ' + sg(cu.v) + '%（' + CFW[cu.t] + '）。';
+    }
+    var all = hasKids(n) && kidsReady(n) ? kids(n) : [], ks = all.map(function (x) { return { x: x, c: wxCf(x.n, m, wl) }; }).filter(function (o) { return o.c && isFinite(o.c.v) && o.c.t >= 0; });
+    var nt = [0, 0, 0]; ks.forEach(function (o) { nt[o.c.t]++; });
+    var down = ks.filter(function (o) { return o.c.t === 0 && o.c.v < 0; }).sort(function (a, b) { return a.c.v - b.c.v; }), up = ks.filter(function (o) { return o.c.t === 0 && o.c.v > 0; }).sort(function (a, b) { return b.c.v - a.c.v; });
+    if (ks.length) r += K + 'ごと（' + ks.length + '）では、はっきり ' + nt[0] + '・傾向 ' + nt[1] + '・まだ分からない ' + nt[2] + (all.length > ks.length ? '・数えていない ' + (all.length - ks.length) : '') + '。' +
+      (down.length ? 'はっきり減るのは ' + nms(down.slice(0, 3)) + '。' : 'はっきり減る' + K + 'は無い。') + (up.length ? 'はっきり増えるのは ' + nms(up.slice(0, 2)) + '。' : '');
+    var y = '考えられる原因（1つには決められない）: ①来客そのものが減る ②重い物・かさばる物・急がない物が後回しにされる ③まわりの様子（車で来る店か、歩き・自転車で来る店か）④雨の日の品ぞろえ・並べ方・作る量 ⑤その分類の売れる日や雨の日が少なく、確かさが低い。どれかは、記録だけでは見分けられない（売場で確かめる）。';
+    var s = '雨の予報の日の目的は、売場の品ぞろえを保ちながら、作りすぎと欠品を防ぐこと。' +
+      (down.length ? 'はっきり減る ' + down.slice(0, 3).map(function (o) { return o.x.n.n; }).join('・') + ' から、作る量・発注・並べ方を、売場で小さく試して確かめる（どこまで減らすかは、試したあとに決める）。'
+        : c.t === 0 && c.v < 0 && ks.length ? 'この段の減りははっきりしているが、どの' + K + 'から減るかは言い切れないので、量を一度に変えず、次の雨の日の売れ方を記録して確かめる。'
+          : '言い切れる差が無いので、量は変えず、次の雨の日の売れ方を記録して確かめる。') +
+      (nt[2] ? '「まだ分からない」' + K + 'の数は、目安にしない。' : '') + (up.length ? 'はっきり増える ' + up.slice(0, 2).map(function (o) { return o.x.n.n; }).join('・') + ' は、雨の日も切らさない。' : '');
+    return [r, y, s];
+  }
   /** 選んだ分析の「この段の図」（掘り下げの下・閉じない） */
   function anFig(n) {
     if (S.an === 'yo') return '';
@@ -1146,8 +1222,18 @@ var STORE_ORDER = [
       if (!W) body = '<p class="hint">この段には、雨の日の数がありません。</p>';
       else {
         var vals = [0, 1].map(function (i) { return W[i] && isFinite(W[i][0]) ? W[i][0] : NaN; }), mk = nc() ? null : [0, 1].map(function (i) { return W[i] ? (isFinite(W[i][1]) ? W[i][1] : W[i][2]) : NaN; });
+        // 確かさ（s1118b）: 2つの雨の強さの、数・段・確かさ。店の段は 95%の幅（3-2 の店の行と同じ）も
+        var gi = S.m === 'c' || S.m === 'q' ? 1 : 0, cfl = [0, 1].map(function (i) {
+          var c = wxCf(n, S.m, i), lab = ['雨（10mm〜）', '強い雨（30mm〜）'][i];
+          if (!c) return '';
+          if (c.few) return '<li><b>' + lab + '</b>: 雨の日が少なくて、まだ分からない（強い雨の日が2日以下の分類は数えていない）</li>';
+          var rg = n.lv === 0 && n.vxr && (S.m === 'a' || S.m === 'c') && n.vxr[gi + 2 * i] ? '・店の 95%の幅 ' + sg(n.vxr[gi + 2 * i][0]) + '〜' + sg(n.vxr[gi + 2 * i][1]) + '%' : '';
+          return '<li><b>' + lab + '</b>: ' + sg(c.v) + '%｜<span class="cfc t' + Math.max(0, c.t) + '">' + (c.t < 0 ? '確かさは読み込み中' : CFW[c.t]) + '</span>' + (c.t >= 0 ? '（確かさ ' + esc(c.k) + '）' : '') + esc(rg) + '</li>';
+        }).join('');
         body = figt('雨の日の' + mname(S.m, n) + '（ふだんの同じ曜日との差・%）') + bars(vals, ['雨（10mm〜）', '強い雨（30mm〜）'], { base: 0, fmt: function (x) { return sg(x) + '%'; }, mark: mk, markName: '同じ型の店の中央（無いときはエリアの中央）', barName: n.lv === 0 ? 'この店' : n.n, unit: '%', title: '雨の日の効き' }) +
-          '<p class="hint">青＝ふだんより多い・赤＝少ない。' + (mk ? '紫の点線＝同じ型の店の中央（無いときはエリアの中央）。' : esc(NC_NOTE)) + '雨の日の買い方（重い物・かさばる物が後回し など）は、上の帯の「天気と売れ方」で見られます。</p>';
+          (cfl ? '<ul class="cfli">' + cfl + '</ul>' : '') +
+          '<p class="hint">青＝ふだんより多い・赤＝少ない。' + (mk ? '紫の点線＝同じ型の店の中央（無いときはエリアの中央）。' : esc(NC_NOTE)) + '確かさ＝ふだんと差が無いのに、たまたまこの差が出る見込みの小ささ（95%以上＝はっきり・70〜95%＝傾向・70%未満＝まだ分からない〈たまたまの範囲〉。' + WX_SAME() + '）。' +
+          (meta().per && meta().per.wx ? '期間 ' + esc(meta().per.wx[0]) + '〜' + esc(meta().per.wx[1]) + '・雨の量は気象庁の記録。' : '') + '雨の日の買い方（重い物・かさばる物が後回し など）は、上の帯の「天気と売れ方」で見られます。</p>';
       }
     } else if (S.an === 'tm') body = '<div class="fig2"><div class="f2b">' + LAZY.dow(n) + '</div><div class="f2a">' + LAZY.hour(n) + '</div></div>';   // 幅のある箱（1920 など）では、立体の棒を左・曜日の指数を右に並べる（s1118a・箱の幅いっぱいなのに図が真ん中に 980px だった）
     else body = LAZY[{ ad: 'ad', md: 'md', ls: 'loss' }[S.an]](n);
@@ -1191,7 +1277,7 @@ var STORE_ORDER = [
     (function walk(p, dep) {
       var lastG = null;
       kids(p).forEach(function (x) {
-        if (x.g && x.g !== lastG) { lastG = x.g; out.push({ grp: x.g, dep: dep }); }
+        if (x.g && x.g !== lastG) { lastG = x.g; out.push({ grp: x.g, gi: x.gi, dep: dep }); }
         var op = !!O[x.id] && hasKids(x.n);
         out.push({ x: x, dep: dep, open: op });
         if (op) { if (kidsReady(x.n)) { walk(x.n, dep + 1); out.push({ end: x, dep: dep + 1 }); } else out.push({ wait: true, dep: dep + 1 }); }
@@ -1199,10 +1285,10 @@ var STORE_ORDER = [
     })(n, 0);
     return out;
   }
-  function rowBtn(r, inner) {
-    var x = r.x, leaf = !hasKids(x.n), c = dcOf(x.n), st = dcStyle(x.n, r.dep);
+  function rowBtn(r, inner, tip) {   // tip＝行の数の説明（雨の日の効きの確かさ など・矢印を合わせたとき）
+    var x = r.x, leaf = !hasKids(x.n), c = dcOf(x.n), st = dcStyle(x.n, r.dep), tp = tip ? '｜' + tip : '';
     return '<button type="button" class="drow' + (leaf ? ' leaf' : '') + (c ? ' dc' : '') + (r.dep ? ' sub' : '') + (r.open ? ' open' : '') + '" data-id="' + esc(x.id) + '"' + (st ? ' style="' + st + '"' : '') +
-      (leaf ? ' title="' + esc(x.n.n) + '（いちばん下の段）"' : ' data-tog="' + esc(x.id) + '" aria-expanded="' + r.open + '" title="押すと、すぐ下に' + esc(x.n.n) + 'の中が開きます（もう一度押すと閉じます）"') +
+      (leaf ? ' title="' + esc(x.n.n + '（いちばん下の段）' + tp) + '"' : ' data-tog="' + esc(x.id) + '" aria-expanded="' + r.open + '" title="' + esc('押すと、すぐ下に' + x.n.n + 'の中が開きます（もう一度押すと閉じます）' + tp) + '"') +
       '><span class="n"><span class="ar">' + (leaf ? '・' : r.open ? '▼' : '▶') + '</span><span>' + esc(x.n.n) + '</span></span>' + inner + '</button>';
   }
   function rowExtra(r) {
@@ -1271,18 +1357,23 @@ var STORE_ORDER = [
   function drillAn(n) {
     var k = kids(n), an = S.an, K = KIDNM[n.lv] || 'クラス', cmp = !nc(), VR = visRows(n);
     var val = function (x) {
-      if (an === 'wx') { var w = wxv(x, S.wl), o = wxv(x, 1 - S.wl); return w ? { d: w[0], md: cmp ? (isFinite(w[1]) ? w[1] : w[2]) : NaN, t: sg(w[0]) + '%', t2: o ? (S.wl ? '雨 ' : '強い雨 ') + sg(o[0]) + '%' : '' } : null; }
+      if (an === 'wx') {   // s1118b: 値と確かさ（wxCf）。数えていない・雨の日が少ない行も、行は出して理由を字で（null にしない）
+        var c = wxCf(x, S.m, S.wl), o = wxCf(x, S.m, 1 - S.wl), w = c && c.w;
+        return { wx: true, c: c, d: c && isFinite(c.v) ? c.v : NaN, md: cmp && w ? (w[1] !== null && isFinite(w[1]) ? w[1] : w[2] !== null && isFinite(w[2]) ? w[2] : NaN) : NaN,
+          t2: o && isFinite(o.v) ? (S.wl ? '雨 ' : '強い雨 ') + sg(o.v) + '%' + (o.t >= 0 ? '・' + CFW[o.t] : '') : o && o.few ? (S.wl ? '雨' : '強い雨') + 'は まだ分からない' : '' };
+      }
       if (an === 'ad') { var a = x.ad; return a && isFinite(a.L) ? { d: a.L, t: num(a.L, 2) + '倍', t2: '比べた ' + num(a.nc) + '件' } : null; }
       if (an === 'ls') { var l = x.ls; return l ? { d: l[2], md: cmp && x.lp ? x.lp[0] : NaN, t: num(l[2], 1) + '%', t2: '見切り ' + num(l[0], 1) + '%・廃棄 ' + num(l[1], 1) + '%' } : null; }
-      if (an === 'md') { var f = x.m5; return f && f.n ? { d: f.down / f.n * 100, f: f, t: f.down + '/' + f.n + '回', t2: '上回った ' + f.up + '回' } : null; }
+      if (an === 'md') { var f = x.m5; return f && f.n ? { d: f.down / f.n * 100, f: f, t: '下回った ' + f.down + '/' + f.n + '回', t2: '上回った ' + f.up + '/' + f.n + '回・並み ' + f.flat } : null; }
       return null;
     };
     var V = VR.filter(function (r) { return r.x; }).map(function (r) { return val(r.x.n); }), bar, lg, R, tk = null;
-    if (an === 'wx') {
-      var mx = 0; V.forEach(function (v) { if (v) mx = Math.max(mx, Math.abs(v.d), isFinite(v.md) ? Math.abs(v.md) : 0); });
+    if (an === 'wx') {   // 目盛りは、はっきり・傾向の行と物差しで決める（「まだ分からない」の大きな値で目盛りを広げない＝効きの数を大きく見せない・目盛りの外は ‹ ›）
+      var mx = 0; V.forEach(function (v) { if (v && isFinite(v.d) && v.c && v.c.t <= 1) mx = Math.max(mx, Math.abs(v.d)); if (v && isFinite(v.md)) mx = Math.max(mx, Math.abs(v.md)); });
       R = Math.min(40, Math.max(5, Math.ceil(mx / 5) * 5));
-      bar = function (v) { return divBar(v.d, 0, R, v.md); }; tk = divTicks(R, 0, pctTick);
-      lg = '<span>' + esc(WL[S.wl]) + 'の日の' + esc(mname(S.m, k[0].n)) + '（ふだんの同じ曜日との差）</span><span><i style="background:#5b8fd6"></i>多い</span><span><i style="background:#e07a6e"></i>少ない</span>' + (cmp ? '<span><i style="border-left:2px dashed #7c3aed;width:0"></i>同じ型の店の中央（その行）</span>' : '') + '<span>目盛りの端 ±' + R + '%</span>' + asideLg('比べる用・' + WL[1 - S.wl] + 'の日の値');
+      bar = function (v) { return wxBar(v.c, R, v.md); }; tk = divTicks(R, 0, pctTick);
+      lg = '<span>' + esc(WL[S.wl]) + 'の日の' + esc(mname(S.m, k[0].n)) + '（ふだんの同じ曜日との差・前年比ではない）</span><span><i style="background:#5b8fd6"></i>多い</span><span><i style="background:#e07a6e"></i>少ない</span>' + WX_LG +
+        (cmp ? '<span><i style="border-left:2px dashed #7c3aed;width:0"></i>同じ型の店の中央（その行）</span>' : '') + '<span>目盛りの端 ±' + R + '%</span>' + asideLg('比べる用・' + WL[1 - S.wl] + 'の日の値');
     } else if (an === 'ad') {
       var ma = 0; V.forEach(function (v) { if (v) ma = Math.max(ma, Math.abs(v.d - 1)); });
       R = Math.min(5, Math.max(1, Math.ceil(ma * 2) / 2));
@@ -1294,20 +1385,40 @@ var STORE_ORDER = [
       bar = function (v) { return oneBar(v.d, R, v.md); }; tk = [[0, '0%'], [50, (R / 2) + '%'], [100, R + '%']];
       lg = '<span>ロスの計（売上に対する %）</span>' + (cmp ? '<span><i style="background:#e07a6e"></i>同じ型の店の中央より多い</span><span><i style="background:#5b8fd6"></i>少ない</span><span><i style="border-left:2px dashed #7c3aed;width:0"></i>同じ型の店の中央（その行）</span>' : '') + '<span>目盛りの端 ' + R + '%</span>' + asideLg('ロスの内訳（売上に対する %）');
     } else {
-      bar = function (v) { return mdBar(v.f); }; tk = [[0, '0%'], [50, '50%'], [100, '100%（回の数）']];
-      lg = '<span>52週MD の回の結果（計画と比べた回の割合）・数＝下回った回／全部の回</span><span><i style="background:#5b8fd6"></i>上回った</span><span><i style="background:#cbd5e1"></i>並み</span><span><i style="background:#e07a6e"></i>下回った</span>' + asideLg('上回った回の数');
+      bar = function (v) { return mdBar(v.f); }; tk = [[0, '0%'], [50, '50%'], [100, '100%（その行の回）']];
+      lg = MD_LG + asideLg('上回った回／その行の回・並み');
     }
     var vi = 0, lim = anDepth(an), skip = -1, rows = VR.map(function (r) {
       if (skip >= 0) { if ((r.dep || 0) > skip) { if (r.x) vi++; return r.end ? rowExtra(r) : ''; } skip = -1; }   // 「〇〇だけを大きく開く」は残す   // 数の無い段（広告・52週MD の中分類より下）は、行の代わりに品・回
-      if (!r.x) return rowExtra(r);
-      var v = V[vi++], cl = !v ? '' : an === 'wx' ? cls(v.d) : an === 'ad' ? cls(v.d - 1) : an === 'ls' && isFinite(v.md) ? (v.d > v.md ? 'dn' : 'up') : '';
+      if (!r.x) {
+        if (an === 'wx' && r.grp && r.gi) { var gn = N()[r.gi], gc = gn ? wxCf(gn, S.m, S.wl) : null; return '<div class="grp' + (r.dep ? ' sub' : '') + '" style="--dep:' + r.dep + '">' + esc(r.grp) + (gc && isFinite(gc.v) ? ' <small>小分類の計 ' + sg(gc.v) + '%・' + (gc.t < 0 ? '確かさは読み込み中' : CFW[gc.t] + (gc.q ? '' : '（確かさ ' + esc(gc.k) + '）')) + '</small>' : gc && gc.few ? ' <small>小分類の計: 雨の日が少なくて、まだ分からない</small>' : '') + '</div>'; }   // 小分類の区切りに、小分類そのものの数と確かさ（3-2 の小分類の行と同じ）
+        return rowExtra(r);
+      }
+      var v = V[vi++];
+      if (an === 'wx') {
+        var gw = !v.c && r.x.gi && N()[r.x.gi] ? wxCf(N()[r.x.gi], S.m, S.wl) : null, gwOk = gw && isFinite(gw.v);   // クラスに数が無く、小分類にはある＝3-2 も小分類まで（クラスが1つ・売れた日が少ない など）
+        return rowBtn(r, wxPct(v.c) + (gwOk ? '<span class="bar nb" aria-hidden="true"><em>このクラスだけの数は無い（上の小分類の計で見る）</em></span>' : bar(v)) + '<span class="val">' + esc(aside(v.t2)) + '</span>', gwOk ? 'このクラスだけの雨の日の差は数えていません（上の小分類の計で見ます）' : wxTip(v.c, S.wl));
+      }
+      if (an === 'md' && v) { var hm = rowBtn(r, mdPct(v.f) + bar(v) + mdVal(v.f), mdTip(v.f)); if (r.open && r.x.n.lv >= lim) { skip = r.dep || 0; hm += TREE ? anItems(an, r.x.n, (r.dep || 0) + 1) : '<div class="hint wait" style="--dep:' + ((r.dep || 0) + 1) + '"><span class="spin" aria-hidden="true"></span>読み込んでいます…</div>'; } return hm; }   // s1118b: 下回った回（赤い字）→ 棒（左から 下回った → 並み → 上回った）→ 上回った回（青い字）。どれも その行の回 が分母   // s1118b: クラスまで（行ごとに 主の数＋確かさのひとこと → 棒〈塗り・枠・点線〉→ 比べる用の添え）
+      var cl = !v ? '' : an === 'ad' ? cls(v.d - 1) : an === 'ls' && isFinite(v.md) ? (v.d > v.md ? 'dn' : 'up') : '';
       var h = rowBtn(r, '<span class="pct ' + cl + '">' + esc(v ? v.t : '―') + '</span>' + (v ? bar(v) : '<span class="bar" aria-hidden="true"></span>') + '<span class="val">' + esc(v ? aside(v.t2) : '') + '</span>');
       if (r.open && r.x.n.lv >= lim) { skip = r.dep || 0; h += TREE ? anItems(an, r.x.n, (r.dep || 0) + 1) : '<div class="hint wait" style="--dep:' + ((r.dep || 0) + 1) + '"><span class="spin" aria-hidden="true"></span>読み込んでいます…</div>'; }
       return h;
     }).join('');
+    var mdh = '';
+    if (an === 'md' && n.m5 && n.m5.n) {   // 上の段の回と、行の回の関係（PO 11/18「59回中17回でなぜ50％」）: 行の回を足すと上の段の回。足りない分は「〇〇の分からない回」の行で出す（黙って合わないままにしない）
+      var sum = 0; k.forEach(function (x) { if (x.n.m5 && x.n.m5.n) sum += x.n.m5.n; });
+      var unk = n.m5.n - sum;
+      mdh = '<div class="hint mdsum">' + esc(n.n + 'の 52週MD は ' + n.m5.n + '回（上回った ' + n.m5.up + '・並み ' + n.m5.flat + '・下回った ' + n.m5.down + '）。下の行は ' + K + 'ごとの回で、棒も数も、その行の回を 100% にしています' +
+        '（行の回を足すと ' + sum + '回' + (unk > 0 ? '・' + K + 'の分からない回 ' + unk + '回＝計 ' + n.m5.n + '回' : '＝' + n.n + 'の回') + '）。') + '</div>';
+      if (unk > 0) rows += '<div class="drow leaf mrow mdu"><span class="n"><span class="ar">・</span><span>' + esc(K) + 'の分からない回</span></span><span class="pct wxp"><b>' + unk + '回</b></span><span class="bar nb" aria-hidden="true"><em>52週MD の区分が' + esc(K) + 'に1対1で結べない回（精肉・惣菜の区分 など）</em></span><span class="val"></span></div>';
+    }
     if (n.lv >= lim) rows = (TREE ? anItems(an, n, 0) : '<div class="hint wait"><span class="spin" aria-hidden="true"></span>読み込んでいます…</div>') + rows;   // 部門を大きく開いたとき: 中分類の数は無いので、先に品・回
     var sw = an === 'wx' ? '<div class="wlsw" role="group" aria-label="雨の強さ">' + WL.map(function (t, i) { return '<button type="button" data-wl="' + i + '" aria-pressed="' + (S.wl === i) + '">' + esc(t) + '</button>'; }).join('') + '</div>' : '';
-    return '<h2 class="sec" id="dig">掘り下げる — ' + esc(K) + 'ごとの' + esc(AN[an]) + (an === 'wx' ? '（' + esc(mname(S.m, k[0].n)) + '）' : '') + '</h2>' + sw + '<div class="drill an"><div class="lg">' + lg + DC_LG + '</div>' + (tk ? ruler(tk.filter(function (t) { return t[1]; })) : '') + rows + '</div>' + DRILL_HINT + (anLimit(an) ? '<div class="hint lim">' + esc(anLimit(an)) + '</div>' : '');
+    var wxh = an === 'wx' ? '<div class="hint">' + WX_SAME() + '。' +
+      '確かさ＝ふだんと差が無いのに、たまたまこの差が出る見込みの小ささ（95% なら、たまたまは 20回に1回ほど）。「まだ分からない」の数は（ ）に小さく出し、目盛りを広げません（目盛りの外は ‹ ›）。' +
+      (S.m === 'q' ? '販売数＝買った人の数 × 1人あたり点数（同じ日・同じ式で測った2つの掛け算）。確かさの段は、2つのうち低いほうです。' : '') + esc(WX_BAND) + '</div>' : '';
+    return '<h2 class="sec" id="dig">掘り下げる — ' + esc(K) + 'ごとの' + esc(AN[an]) + (an === 'wx' ? '（' + esc(mname(S.m, k[0].n)) + '）' : '') + '</h2>' + sw + mdh + '<div class="drill an' + (an === 'wx' ? ' wxd' : an === 'md' ? ' mdd' : '') + '"><div class="lg">' + lg + DC_LG + '</div>' + (tk ? ruler(tk.filter(function (t) { return t[1]; })) : '') + rows + '</div>' + DRILL_HINT + wxh + (anLimit(an) ? '<div class="hint lim">' + esc(anLimit(an)) + '</div>' : '');
   }
   function divBar(d, base, R, md) {   // 基準（0 か 1倍）を真ん中に、左右へ
     var pos = function (v) { return 50 + Math.max(-R, Math.min(R, v - base)) / R * 50; }, p = pos(d);
@@ -1319,10 +1430,16 @@ var STORE_ORDER = [
     var w = Math.max(0, Math.min(100, d / R * 100)), hi = isFinite(md) && d > md;
     return '<span class="bar" aria-hidden="true"><span class="zl" style="left:0"></span>' + (isFinite(md) ? '<span class="pl" style="left:' + Math.min(100, md / R * 100) + '%"></span>' : '') + '<i class="' + (hi ? 'd' : 'u') + '" style="left:0;width:' + w + '%"></i></span>';
   }
-  function mdBar(f) {   // 上回った・並み・下回った の割合（左から）
-    var t = f.n || 1, u = f.up / t * 100, fl = f.flat / t * 100, dn = f.down / t * 100;
-    return '<span class="bar" aria-hidden="true"><i class="u" style="left:0;width:' + u + '%"></i><i style="left:' + u + '%;width:' + fl + '%;background:#cbd5e1"></i><i class="d" style="left:' + (u + fl) + '%;width:' + dn + '%"></i></span>';
+  // 52週MD の行（s1118b・PO 11/18「上回った回と、下回った回の色と説明があってない」「59回中17回でなぜ50％になるのか」）:
+  //   主の数＝下回った回／その行の回（赤い字）→ 棒（その行の回を 100% に、左から 下回った 赤 → 並み 灰 → 上回った 青）→ 添え＝上回った回／その行の回・並み（青い字）。近さと色と字が同じ向き
+  function mdBar(f) {
+    var t = f.n || 1, dn = f.down / t * 100, fl = f.flat / t * 100, u = f.up / t * 100;
+    return '<span class="bar" aria-hidden="true"><i class="d" style="left:0;width:' + dn + '%"></i><i style="left:' + dn + '%;width:' + fl + '%;background:#cbd5e1"></i><i class="u" style="left:' + (dn + fl) + '%;width:' + u + '%"></i></span>';
   }
+  function mdPct(f) { return '<span class="pct wxp mdn"><b>' + esc(f.down + '/' + f.n) + '回</b><small>下回った</small></span>'; }   // 数も字として入れる（K1）
+  function mdVal(f) { return '<span class="val mup">' + esc('（上回った ' + f.up + '/' + f.n + '回・並み ' + f.flat + '）') + '</span>'; }
+  function mdTip(f) { return '52週MD ' + f.n + '回のうち、下回った ' + f.down + '・並み ' + f.flat + '・上回った ' + f.up + '（棒はこの行の ' + f.n + '回を 100% に）'; }
+  var MD_LG = '<span>52週MD の回の結果（計画と比べた回・その行の回を 100% に、左から）</span><span><i style="background:#e07a6e"></i>下回った（左の赤い数）</span><span><i style="background:#cbd5e1"></i>並み</span><span><i style="background:#5b8fd6"></i>上回った（右の青い数）</span>';
   function details(n) {
     var h = '';
     if (hasKids(n) && kidsReady(n)) {
@@ -2204,6 +2321,7 @@ var STORE_ORDER = [
     var c0 = j && j.c;
     if (!c0 || typeof c0.XO !== 'number' || !Array.isArray(c0.S) || c0.S.length < 2 || !Array.isArray(c0.RN) || c0.RN.length < 2 || !Array.isArray(c0.AREA) || !Array.isArray(j.n) || !Array.isArray(j.r) || !j.r.length || j.r[0].length < c0.XO + 2)
       return Promise.reject(new Error('レポートの 3-2 の図のデータの形が、この画面の知っている形と違います'));
+    if (c0.LINE !== CF_LINE || c0.LOW !== CF_LOW) return Promise.reject(new Error('レポートの 3-2 の確かさの境目が、この画面（店のいまと同じ決まり）と違います'));   // 本部と店で、同じ数の段が食い違わないように（s1118b）
     var d = { c: j.c, n: j.n.slice(), r: j.r.slice(), k: [], top: [], st: [] };
     var bin = atob(b[1].replace(/\s+/g, '')), u = new Uint8Array(bin.length);
     for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
@@ -2251,8 +2369,8 @@ var STORE_ORDER = [
   function w32Nm(d, i) { var nm = d.n[d.r[i][2]]; return d.r[i][0] === 0 ? String(nm).replace(W32_PRE, '').replace(/店$/, '') : nm; }
   function w32V(d, i, b) { var v = d.r[i][b]; return v === null || v === undefined ? null : v / 10; }
   // 確かさの段（レポートと同じ決まり）: 0＝塗り（95%以上）・1＝枠だけ（70〜95%・中分類の「95%未満」）・2＝点線の枠（70%未満）
-  function w32Tier(k) { if (k === null || k === undefined) return 2; if (k > 100) return k === 101 ? 1 : 0; return k >= W32.c.LINE ? 0 : k >= W32.c.LOW ? 1 : 2; }
-  function w32Cf(k) { return k === null || k === undefined ? '—' : k > 100 ? ['95%未満', '95〜99%', '99%以上'][k - 101] : k >= 99 ? '99%以上' : k + '%'; }
+  function w32Tier(k) { return cfTier(k); }   // 店のいまの雨の日の効きと同じ1か所（cfTier）。境目はレポートの決まり（LINE 95・LOW 70）と同じことを w32FromHtml で確かめる
+  function w32Cf(k) { return cfPct(k); }
   function w32Cmp(d, b) { return function (x, y) { var p = d.r[x][b], q = d.r[y][b], np = p === null || p === undefined, nq = q === null || q === undefined; if (np !== nq) return np ? 1 : -1; if (!np && p !== q) return p - q; return x - y; }; }
   function w32Kids(d, i, b) { var k = d.k[i].slice(); if (k.length && d.r[k[0]][0] > 1) k.sort(w32Cmp(d, b)); return k; }   // 部門は決めた順のまま・中分類より下は、減りの大きい順（店の並びは w32Vis で正の順）
   function w32Dept(d, i) { var x = i; while (x >= 0 && d.r[x][0] > 1) x = d.r[x][1]; return x >= 0 && d.r[x][0] === 1 ? d.n[d.r[x][2]] : null; }
@@ -2286,8 +2404,8 @@ var STORE_ORDER = [
       '｜' + rl + ' ' + (rv === null ? '—' : sg(rv) + '%（確かさ ' + w32Cf(r[b + 3]) + '）') + (x.can ? '｜押すと、すぐ下に' + ['部門', '中分類', '小分類', 'クラス'][lv] + 'が開きます' : '');
     return '<button type="button" class="drow' + (x.can ? '' : ' leaf') + (c ? ' dc' : '') + (lv ? ' sub' : '') + (x.open ? ' open' : '') + '"' + (x.can ? ' data-w32="' + i + '" aria-expanded="' + x.open + '"' : '') + (sty ? ' style="' + sty + '"' : '') + ' title="' + esc(tip) + '">' +
       '<span class="n"><span class="ar">' + (x.can ? (x.open ? '▼' : '▶') : '・') + '</span><span>' + esc(w32Nm(d, i)) + '</span>' + tag + '</span>' +
-      '<span class="pct ' + (l === null ? '' : cls(l)) + '">' + (l === null ? '—' : sg(l) + '%') + '</span>' +
-      (l === null ? '<span class="bar" aria-hidden="true"></span>' : w32Bar(l, R, ref, w32Tier(r[b + 1]), lo, hi)) +
+      wxPct(l === null ? (g >= 2 ? { few: true } : null) : { v: l, t: w32Tier(r[b + 1]), k: w32Cf(r[b + 1]) }) +   // 店のいまと同じ主の数（値＋確かさのひとこと・s1118b）
+      (l === null ? wxBar(g >= 2 ? { few: true } : null, R, null) : w32Bar(l, R, ref, w32Tier(r[b + 1]), lo, hi)) +
       '<span class="val">' + esc(rv === null ? '' : aside(rl + ' ' + sg(rv) + '%')) + '</span></button>';
   }
   /** 天気と売れ方の「店ごとの違い」（本部だけ）。雨の強さ（S.wl）×見る数（S.wm: 0 売上・1 来客数）。開いた行＝S.wo（行の番号） */
@@ -2305,10 +2423,10 @@ var STORE_ORDER = [
     // 凡例は短い言葉で（スマホで1行に2〜3つ入るように・PO 11/17 の図の見やすさ）。細かい読み方は図の下の一文へ
     var lg = '<div class="lg"><span>' + esc(rn) + 'の日の' + mn + '（ふだんとの差・前年比ではない）</span>' +
       '<span><i style="background:#e07a6e"></i>減る</span><span><i style="background:#5b8fd6"></i>増える</span>' +
-      '<span><i class="lgt"></i>はっきり（95%以上）</span><span><i class="lgt t1"></i>傾向（70〜95%）</span><span><i class="lgt t2"></i>たまたま（70%未満）</span>' +
+      WX_LG +   // 店のいまの雨の日の効きと同じ言葉（s1118b）
       '<span><i style="border-left:2px dashed #7c3aed;width:0"></i>その店</span><span><i style="background:#1f2933;height:2px;vertical-align:3px"></i>店の95%の幅</span>' +
       '<span>端 ±' + R + '%</span>' + asideLg(m ? '1人あたり点数' : '1人あたり売上') + '</div>';
-    return '<h2 class="sec" id="wxstores">店ごとの違い — ' + esc(rn) + 'の日の' + mn + '（本部だけ）</h2>' + sw + '<div class="drill an w32">' + lg + ruler(divTicks(R, 0, pctTick)) + rows + '</div>' +
+    return '<h2 class="sec" id="wxstores">店ごとの違い — ' + esc(rn) + 'の日の' + mn + '（本部だけ）</h2>' + sw + '<div class="drill an w32 wxd">' + lg + ruler(divTicks(R, 0, pctTick)) + rows + '</div>' +
       '<div class="hint">店の行を押すと、すぐ下に部門が開きます。部門 → 中分類 → 小分類 → クラスと、押すたびに細かく開きます（もう一度押すと閉じる）。' +
       '店の行は店全体の' + (m ? '来客数（（ ）は1人あたり点数）' : '売上（（ ）は客単価）') + '、部門より下は' + (m ? 'その分類を買った人の数' : 'その分類の売上') + 'です。棒の塗り・枠・点線は、数の確かさ（ふだんの揺れで説明できない確からしさ）。紫の点線は、その店の値です。行の地の色・左の帯は部門の印（増え減りの色ではありません）。' +
       '数は分析レポート「売れ方・ロス・天気の分析」' + (W32_LABEL ? '（' + esc(W32_LABEL) + '）' : '') + 'の 3-2 と同じです。' + extA('reports/#/WEATHER/w-s3b', 'レポートの 3-2 で見る（新しいタブ）') + '</div>';
@@ -2439,7 +2557,7 @@ var STORE_ORDER = [
     for (var j = 0; j < src.length; j++) { var wd = src[j].getBoundingClientRect().width + 'px'; dst[j].style.cssText = 'width:' + wd + ';min-width:' + wd + ';max-width:' + wd + ';box-sizing:border-box;position:relative;top:0'; }
     FH.style.display = 'block'; FH.style.top = top + 'px'; FH.style.left = (pick.r.left + w2.clientLeft) + 'px'; FH.style.width = w2.clientWidth + 'px';
     ct.style.transform = 'translateX(' + (-w2.scrollLeft) + 'px)';
-    if (dst[0]) { dst[0].style.transform = 'translateX(' + w2.scrollLeft + 'px)'; dst[0].style.zIndex = '2'; }
+    if (dst[0]) { dst[0].style.transform = 'translateX(' + w2.scrollLeft + 'px)'; dst[0].style.zIndex = '5'; }   // 左の列の見出しは、ほかの見出し（z-index 3）より上に（s1118b: 横に送ると、写しの左の列の上にほかの列の見出しが重なっていた＝ui_check 項目8・375）
   }
 
   // ── 入口の重ね（ログイン・読み込み中）
@@ -2606,6 +2724,6 @@ var STORE_ORDER = [
     bind();
     AUTH.start(onReady, { gate: showGate, busy: showBusy });
   });
-  window.STATUS_APP = { go: go, back: back, fromBack: fromBack, from: function () { var f = S.from && FROMS[S.from]; return f ? f.nm : ''; }, place: placeName, guide: { open: openGuide, ready: function () { return !!GD.html; }, go: gdGo, here: function () { return GD.here; }, prof: function () { var t0 = performance.now(); GD.cache = ''; var c = gdPrepared(), t1 = performance.now(); return { prep: t1 - t0, bytes: c.length }; } }, histLen: function () { return HIST.length; }, drillTo: drillTo, state: S, fhUpdate: fhUpdate, openSec: function (id) { openSec(id); }, tree: function () { return TREE; }, me: function () { return ME; }, kept: function () { return Object.keys(DATA).filter(function (c) { return DATA[c] && DATA[c].tree; }).length; }, dict: function () { return DICT; }, busy: function () { return !!(TREE_P || W32_P) || PEND > 0; }, gliding: function () { return !!glStop; },   // busy＝店の木・3-2 の数を裏で受け取っている最中（試験が、届いた後の描き直しと押すのが重ならないように待つ）
+  window.STATUS_APP = { go: go, back: back, fromBack: fromBack, from: function () { var f = S.from && FROMS[S.from]; return f ? f.nm : ''; }, place: placeName, guide: { open: openGuide, ready: function () { return !!GD.html; }, go: gdGo, here: function () { return GD.here; }, prof: function () { var t0 = performance.now(); GD.cache = ''; var c = gdPrepared(), t1 = performance.now(); return { prep: t1 - t0, bytes: c.length }; } }, histLen: function () { return HIST.length; }, drillTo: drillTo, state: S, fhUpdate: fhUpdate, openSec: function (id) { openSec(id); }, tree: function () { return TREE; }, w32: function () { return W32; }, me: function () { return ME; }, kept: function () { return Object.keys(DATA).filter(function (c) { return DATA[c] && DATA[c].tree; }).length; }, dict: function () { return DICT; }, busy: function () { return !!(TREE_P || W32_P) || PEND > 0; }, gliding: function () { return !!glStop; },   // busy＝店の木・3-2 の数を裏で受け取っている最中（試験が、届いた後の描き直しと押すのが重ならないように待つ）
     find: function (q) { var i = $('#q1'); i.value = q; search(i, $('#r1')); return $$('#r1 button[data-hit]').map(function (b) { return b.textContent; }); } };
 })();
