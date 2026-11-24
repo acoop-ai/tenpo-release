@@ -903,5 +903,67 @@ main .nx{width:fit-content;max-width:min(100%,72em)}
 @media (max-width:760px){#d-cmp table.t th:first-child,#d-cmp table.t td:first-child{white-space:normal;min-width:7em;max-width:11em}}
 .guide2 .mk-row.mdr{grid-template-columns:minmax(4.5em,9em) 5.6em minmax(60px,1fr) auto}
 .guide2 .mk-lg>span{white-space:nowrap}
+/* 11/24 s1124a（PO「指数は棒グラフで書くものじゃない…率や指数などは折れ線グラフか、数値の位置だけ…」・認知の決まり5）: 率・指数・比は、基準の線（0% か 1.00倍）を通した目盛りの上の点。
+   点から基準の線へ細い線（st）。点の塗り・枠・点線＝雨の日の効きの確かさの段（はっきり・傾向・まだ分からない）。棒（0 から積み上がる量）は実数だけ */
+.bar i.stm{top:8px;height:2px;border-radius:1px;border:0}
+.bar i.stm.u{background:#7ea6dc}.bar i.stm.d{background:#e39a91}
+.bar b.dt{position:absolute;top:2px;width:14px;height:14px;margin-left:-7px;border-radius:50%;box-sizing:border-box;background:#2f6fc6;border:2px solid #fff;box-shadow:0 0 0 1px #2f6fc6;z-index:1}
+.bar b.dt.d{background:#d0574a;box-shadow:0 0 0 1px #d0574a}
+.bar b.dt.t1{background:#fff;border:3px solid #2f6fc6;box-shadow:none}.bar b.dt.d.t1{border-color:#d0574a}
+.bar b.dt.t2{background:#fff;border:2px dashed #4f7fc4;box-shadow:none}.bar b.dt.d.t2{border-color:#c8645a}
+.gauge.dot{height:14px;background:none;margin:4px 0 1px}
+.gauge.dot::before{content:"";position:absolute;left:0;right:0;top:6px;height:2px;background:#e2e8f0;border-radius:1px}
+.gauge.dot .z{top:0;bottom:0}.gauge.dot .m{top:-1px;bottom:-1px}
+.gauge.dot i.stm{top:6px;bottom:auto;height:2px;border-radius:1px}.gauge.dot i.stm.u{background:#7ea6dc}.gauge.dot i.stm.d{background:#e39a91}
+.gauge.dot b.dt{position:absolute;top:1px;width:12px;height:12px;margin-left:-6px;border-radius:50%;box-sizing:border-box;background:#2f6fc6;border:2px solid #fff;box-shadow:0 0 0 1px #2f6fc6}
+.gauge.dot b.dt.d{background:#d0574a;box-shadow:0 0 0 1px #d0574a}
+.drill .lg i.ldt,.lg i.ldt{width:11px;height:11px;border-radius:50%;background:#2f6fc6;vertical-align:-1px}
+.drill .lg i.ldt.d,.lg i.ldt.d{background:#d0574a}
+.drill .lg i.lgt{width:12px;height:12px;border-radius:50%;background:#d0574a;box-sizing:border-box}
+.drill .lg i.lgt.t1{background:#fff;border:3px solid #d0574a}.drill .lg i.lgt.t2{background:#fff;border:2px dashed #c8645a}
+.blg i.sp{width:11px;height:11px;border-radius:50%;background:linear-gradient(90deg,#2f6fc6 50%,#d0574a 50%)}
+.drill .grp small.gsum,.drill .grp small{white-space:normal}
+table.t tr.tgrp small.gsum{font-weight:600;color:var(--sub);margin-left:4px}
+/* 11/24 s1124a: 小分類の見出しに計の数（どの分析も同じ見え方）・止まる所を見出しで先に言う */
+.drill .grp .gs{font-weight:700;color:#334155;margin-left:6px;font-size:12.5px;font-variant-numeric:tabular-nums}
+.drill .grp .gs.up{color:var(--up)}.drill .grp .gs.dn{color:var(--dn)}
+h2.sec small.stop,h3.mh small.stop{display:inline-block;font-size:12.5px;font-weight:800;color:#7c2d12;background:#fff1e6;border:1px solid #f3c7a5;border-radius:999px;padding:1px 10px;margin-left:10px}
+.hint.stopx{margin:2px 2px 6px;color:#7c2d12}
+/* 11/24 s1124a: 時間帯ごとの客単価（売上 ÷ 来客数）の折れ線。時刻の目盛りは、すぐ上の立体の図（はじめの向き）にそろえる */
+.c3s .c3u{display:block;margin:0 auto;height:auto;max-width:980px;cursor:default}
+.tma .c3s .c3u{max-width:640px}
+.anf .fig2 .c3s .c3u{max-width:1100px}
+.c3uh{display:flex;flex-wrap:wrap;gap:2px 14px;align-items:baseline;font-size:13px;color:var(--sub);margin:8px 0 0;max-width:980px;margin-left:auto;margin-right:auto}
+.c3uh b{color:#0f172a;font-size:14px}
+.c3uh i{display:inline-block;width:18px;height:0;border-top:3px solid #1f5fae;vertical-align:3px;margin-right:4px}
+.c3uh i.we{border-top-color:#c2620a}.c3uh i.lo{border-top:2px dashed #94a3b8}.c3uh i.av{border-top:2px dashed #475569}
+.c3s g.hot circle.v{stroke:#0f172a;stroke-width:2.4}
+.c3s .c3u g[data-u]{cursor:pointer}
+.tmt .c3m svg.c3um{display:block;width:100%;height:auto}
+.c3k.up1{margin-top:2px}
+.c3cap{font-size:13.5px;font-weight:700;color:#334155;margin:8px 0 2px}
+.c3.c3up{padding-bottom:8px}
+.c3tip span.lo,.c3tip em.lo{color:#fde68a}
+.c3m g.hot circle.v{stroke:#0f172a;stroke-width:2.2}
+table.t td.ulo{color:#94a3b8}
+/* 11/24 s1124a: 利用ガイドの模式図も、率・指数は点（画面の divBar と同じ形） */
+.guide2 .mk-row .rb i.stm{top:50%;bottom:auto;height:2px;margin-top:-1px;border-radius:1px}
+.guide2 .mk-row .rb i.stm.u{background:#7ea6dc}.guide2 .mk-row .rb i.stm.d{background:#e39a91}
+.guide2 .mk-row .rb b.dt{position:absolute;top:50%;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;box-sizing:border-box;background:#2f6fc6;border:2px solid #fff;box-shadow:0 0 0 1px #2f6fc6;z-index:1}
+.guide2 .mk-row .rb b.dt.d{background:#d0574a;box-shadow:0 0 0 1px #d0574a}
+.guide2 .mk-row .rb b.dt.t1{background:#fff;border:3px solid #2f6fc6;box-shadow:none}.guide2 .mk-row .rb b.dt.d.t1{border-color:#d0574a}
+.guide2 .mk-row .rb b.dt.t2{background:#fff;border:2px dashed #4f7fc4;box-shadow:none}.guide2 .mk-row .rb b.dt.d.t2{border-color:#c8645a}
+.guide2 .mk-lg i.lt0,.guide2 .mk-lg i.lt1,.guide2 .mk-lg i.lt2{width:11px;height:11px;border-radius:50%;box-sizing:border-box}
+.guide2 .mk-lg i.lt0{background:#d0574a;border:0}.guide2 .mk-lg i.lt1{background:#fff;border:3px solid #d0574a}.guide2 .mk-lg i.lt2{background:#fff;border:2px dashed #c8645a}
+.guide2 .mk-lg i.ldt{display:inline-block;width:10px;height:10px;border-radius:50%;background:#2f6fc6;margin:0 3px 0 6px;vertical-align:-1px}.guide2 .mk-lg i.ldt.d{background:#d0574a}
+.guide2 .mk-up{display:block;margin-top:2px}
+.guide2 .mk-uph{display:flex;flex-wrap:wrap;gap:2px 12px;font-size:12.5px;color:var(--sub);margin:4px 0 0}
+.guide2 .mk-uph b{color:#0f172a;font-size:13px}
+.guide2 .mk-uph i{display:inline-block;width:16px;height:0;border-top:3px solid #1f5fae;vertical-align:3px;margin-right:3px}
+.guide2 .mk-uph i.we{border-top-color:#c2620a}.guide2 .mk-uph i.av{border-top:2px dashed #475569}.guide2 .mk-uph i.lo{border-top:2px dashed #94a3b8}
+.guide2 .mk-stop{display:inline-block;font-size:12px;font-weight:800;color:#7c2d12;background:#fff1e6;border:1px solid #f3c7a5;border-radius:999px;padding:0 8px;margin-left:6px}
+.guide2 .mk-grp small.gs{font-weight:700;color:#334155}
+/* 11/24 s1124a（画面の既定の点検 項目8・375）: 曜日の指数の掘り下げの表は、小分類の行に「小分類の計」を足したので、幅 375 で左の列が枠の 6 割を超えた → 狭い画面では左の列を折り返して 9em まで・「小分類の計」は名前の下の行に */
+@media (max-width:760px){.drill.tm table.t th:first-child,.drill.tm table.t td:first-child{white-space:normal;min-width:6em;max-width:9em}.drill.tm table.t tr.tgrp small.gsum{display:block;margin-left:0}}
 
-:root{--css-build:"status-web-2026-11-18b"}
+:root{--css-build:"status-web-2026-11-24a"}
