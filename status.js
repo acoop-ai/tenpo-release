@@ -104,7 +104,8 @@ var STORE_ORDER = [
     return { year: '年間の流れ', wx: '天気と売れ方', admin: '更新の状態', guide: '利用ガイド' }[v] || '';
   }
   // how.part＝描き直す塊（行を押してその場で開く・閉じるときは、その塊だけを入れ替える。PO 11/17「1つ押すたびに全部を描き直さない」）。how.nav＝pushHist の kind
-  function go(ch, how) { pushHist(how && how.nav); for (var k in ch) S[k] = ch[k]; if ('path' in ch && !('open' in ch)) S.open = []; if (how && how.part && redraw(how.part)) { NAV0 = null; return; } render(how || {}); }
+  //   s1125a: how.anc＝読んでいた所（ancGet）・how.ren＝その鍵の付け替え（店・部門を替えたとき）。塊だけ描き直すときも、読んでいた所を同じ高さに戻す
+  function go(ch, how) { pushHist(how && how.nav); for (var k in ch) S[k] = ch[k]; if ('path' in ch && !('open' in ch)) S.open = []; if (how && how.part && redraw(how.part)) { NAV0 = null; if (how.parts) how.parts.forEach(function (p) { if (p === 'blk-mai') maiRedraw(); else redraw(p); }); if (how.anc) ancPut(how.anc, how.ren); pbar(); return; } render(how || {}); }
   // ── 描き直す塊: 全体を描くときに、塊ごとに「その塊を作る関数」を覚える（全体を描くたびに作り直す＝前の画面の関数は持ち続けない）
   var PART = {};
   function blk(id, fn) { PART[id] = fn; return '<div class="blk" id="' + id + '">' + fn() + '</div>'; }
@@ -117,7 +118,7 @@ var STORE_ORDER = [
     var el = document.getElementById(id), fn = PART[id]; if (!el || !fn) return false;
     var a = document.activeElement, fk = '';
     if (a && a !== document.body && el.contains(a) && a.dataset) for (var i = 0; i < FOCUS_KEYS.length; i++) if (a.dataset[FOCUS_KEYS[i]] != null) { fk = '[data-' + FOCUS_KEYS[i] + '="' + String(a.dataset[FOCUS_KEYS[i]]).replace(/["\\]/g, '\\$&') + '"]'; break; }
-    fhReset(); el.innerHTML = fn();
+    fhReset(); el.innerHTML = fn(); dovDrawAll();
     if (fk) { var f = el.querySelector(fk); if (f) { try { f.focus({ preventScroll: true }); } catch (e) { /* 古いブラウザ */ } } }   // 押した行に、キーボードの位置を戻す
     setBack(); fhSchedule();
     return true;
@@ -156,7 +157,9 @@ var STORE_ORDER = [
   // ── 描く
   var main = null;
   function render(how) {
-    fhReset(); PART = {}; LZF = {}; C3R = {}; TMN = {}; fromSettle(); c3TipHide();
+    // s1125a（PO 11/25「切り替えればすぐに画面が切り替わるように」）: 見方を替えて描き直すとき（keep）は、読んでいた図・節を同じ高さに残し、開いていた「くわしく」を開いたままにする（ページの頭へ飛ばない・閉じない）
+    var anc = how.keep && how.y == null && main.firstChild ? (how.anc || ancGet()) : null, dets = anc ? detOpenKeys() : null;
+    fhReset(); PART = {}; LZF = {}; C3R = {}; TMN = {}; DOV.g = {}; fromSettle(); c3TipHide();
     setBack();
     var h = '';
     if (S.view === 'home' || S.view === 'status') h = viewHome();
@@ -164,12 +167,15 @@ var STORE_ORDER = [
     else if (S.view === 'guide') h = viewGuide();
     else h = viewLens(S.view);
     main.innerHTML = h + (S.view === 'guide' ? '' : foot());
+    if (dets) detReopen(dets);
     pbar();
     if (S.view === 'guide') gdAfter();
     var es = main.querySelector('.evstrip [aria-pressed="true"]');   // 催事の選び（1行の横送り）: 選んでいる催事が見える所まで送る
     if (es) { var ep = es.parentNode, dx = es.getBoundingClientRect().left - ep.getBoundingClientRect().left; if (dx < 0 || dx + es.offsetWidth > ep.clientWidth) ep.scrollLeft += dx - 12; }
     sideNav();
+    dovDrawAll();
     land(how);
+    if (anc) ancPut(anc, how.ren);
     fhSchedule();
   }
   /** 幅のある PC（1480〜）で、札と掘り下げを左・AI のコメントと次の一手を右に並べる包み（PO 11/17e「図と AI のコメントを左右に」）。細い画面では上から 札 → AI → 掘り下げ のまま */
@@ -286,10 +292,13 @@ var STORE_ORDER = [
     GD.cache = d.innerHTML;
     return GD.cache;
   }
+  // 社内の生成AI利用ガイドライン 6.(4)（2026-11-25 PO「推奨どおり」・決まりの原本はハブ 50_operations\rule_genai_label_on_outputs.md）: 字は1字も変えない。利用ガイドの頭に1行・AI のコメントの欄は style.css の .ai::after（どの AI のコメントにも1か所で）
+  // 生成AIの明示（社内の生成AI利用ガイドライン 6.(4)・決まりの原本＝ハブ 50_operations\rule_genai_label_on_outputs.md・PO 11/25 夕方）: 画面のいちばん下と利用ガイドのいちばん最後に小さく1行
+  var AICREDIT = '<p class="aicredit">生成物の作成にAIを利用しています。</p>';
   function viewGuide() {
     if (!GD.html) { gdFetch(); return '<h1 class="vt" id="lvtop">店舗運営/MDの辞書利用ガイド</h1><div class="hint wait"><span class="spin" aria-hidden="true"></span>利用ガイドを読み込んでいます…</div>'; }
     var body = gdPrepared();
-    return '<h1 class="vt" id="lvtop">店舗運営/MDの辞書利用ガイド' + (GD.role ? '<small>' + esc(GD.role) + '</small>' : '') + '</h1><div class="guide2">' + body + '</div>';
+    return '<h1 class="vt" id="lvtop">店舗運営/MDの辞書利用ガイド' + (GD.role ? '<small>' + esc(GD.role) + '</small>' : '') + '</h1>' + '<div class="guide2">' + body + '</div>' + AICREDIT;
   }
   /** ガイドを描いたあと: 画面の地図の「いまここ」（ガイドを開く前の画面）・狭い画面ではつながりの箱を閉じる・いまここの見つけ方の最初の例 */
   function gdAfter() {
@@ -399,7 +408,7 @@ var STORE_ORDER = [
   }
   function foot() {
     var m = (TREE || SUM) && meta();
-    return '<div class="foot">' + (m && m.per ? '数は ' + esc(m.per.sales[0]) + '〜' + esc(m.per.sales[1]) + '（前年比は直近4週 ' + esc(m.per.yoy[0]) + '〜' + esc(m.per.yoy[1]) + '）' : '') + (ME ? '｜' + esc(ME.email) + '（' + esc(roleLabel()) + '）' : '') + '</div>';
+    return '<div class="foot">' + (m && m.per ? '数は ' + esc(m.per.sales[0]) + '〜' + esc(m.per.sales[1]) + '（前年比は直近4週 ' + esc(m.per.yoy[0]) + '〜' + esc(m.per.yoy[1]) + '）' : '') + (ME ? '｜' + esc(ME.email) + '（' + esc(roleLabel()) + '）' : '') + '</div>' + AICREDIT;
   }
   /** 別のページへ出る印（11/17e PO 問4 A: 別のページは新しいタブで開く。日本語の書体に「↗」が無い端末があるので、その場の絵で） */
   var EXT = '<svg class="ext" viewBox="0 0 12 12" aria-label="新しいタブで開きます" role="img"><path d="M5 2h5v5M10 2L3.5 8.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M8 8.5V10H2V4h1.5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>';
@@ -430,25 +439,299 @@ var STORE_ORDER = [
     var i = nm.indexOf('（'), base = i > 0 ? nm.slice(0, i) : nm, det = i > 0 ? nm.slice(i) : '';
     w.innerHTML = '<button type="button" id="fromchip" title="来た所（' + esc(nm) + '）の、見ていた位置へ戻ります"><span aria-hidden="true">←&nbsp;</span><span>' + esc(base) + '</span><span class="fd">' + esc(det) + '</span><span>に戻る</span></button>';
   }
+  // ── いま見ている所の帯（s1125a・パンくずリスト＝いまいる所の道すじに、その場の切り替えを足した形。PO 11/25「店舗にクローズアップしている時に、売上や来客を切り替えれば
+  //   すぐに画面が切り替わるように、店舗や部門を変えればすぐ切り替わると使いやすいです　ヘッダに余白があるので、スクロールで消えないこの位置に現在位置を表示して切り替えられるようにしたい」）:
+  //   いまいる所（全店のいま › 店 › 部門 › 中分類 › クラス）を1行で。名前を押すとその段へ・▾ で同じ段のほかの店・部門に替える（店は正の店の並び・エリアでまとめる・探す欄は字のゆれを吸収）。
+  //   本部の地図では、いま開いている（選んでいる）立体の店・部門が「いまいる所」。替えても、読んでいた図・節の高さはそのまま（ancGet / ancPut）・開いていた図（曜日ごとの図）も開いたまま。
+  //   往復: 手元にある数は 0・店の木が要るときだけ 1（前と同じ・待つ間は、いまの図に待ちの印）。替える前の見方は履歴に積む（「← ひとつ前に戻る」で戻る）。
+  //   店のアカウントの一覧は、自分の所属の店だけ（ほかの店は窓口が返さない＝画面で隠すだけにしない）
+  var CRM = null, CP = { el: null, kind: '', i: -1, btn: null, keys: null }, SWP = '', MKS = { a: '売上', q: '販売', c: '来客', u: '単価' };
+  function mapStoreOf(code) { var M = ME && ME.map, f = null; if (M) M.areas.forEach(function (a) { a.stores.forEach(function (s) { if (String(s.c) === String(code)) f = s; }); }); return f; }
+  function treeOf(code) { var d = DATA[code]; return d && d.tree ? d.tree : null; }
+  function nodeNmOf(code, id) { var T = treeOf(code); if (T && T.N[id]) return T.N[id].n; var M = ME && ME.map, z = M ? mapDl(M).filter(function (x) { return x.id === id; })[0] : null; return z ? z.n : id; }
+  /** 本部の地図で、いま開いている（選んでいる）立体: S.mo の最後に開いた店（か、エリアの部門）と、そこまでの段。無ければ null */
+  function mapFocus() {
+    var M = ME && ME.map; if (!M || CUR || !(S.view === 'home' || S.view === 'status')) return null;
+    var mo = (S.mo || []).map(String), last = mo[mo.length - 1]; if (!last) return null;
+    if (last.indexOf('A:') === 0) {   // エリアの部門（1店あたり）
+      var p = last.split(':'), an = p[1], dep = p.slice(2).join(':'), A = M.areas.filter(function (a) { return a.nm === an; })[0]; if (!A) return null;
+      var ch = [{ key: 'A:' + an, nm: an + '（1店あたり）' }];
+      if (dep) ch.push({ key: last, id: dep, nm: nodeNmOf('', dep) });
+      return { area: an, A: A, chain: ch };
+    }
+    var code = last.split(':')[0], s = mapStoreOf(code); if (!s) return null;
+    var keys = mo.filter(function (k) { return k === code || k.indexOf(code + ':') === 0; }), lk = keys[keys.length - 1], ch2 = [{ key: code, nm: s.nm }];
+    if (lk !== code) {
+      var id = lk.slice(code.length + 1), T = treeOf(code), ids = [];
+      if (T && T.N[id]) { for (var x = id, g = 0; x && T.N[x] && T.N[x].lv >= 1 && g++ < 8; x = T.N[x].p) if (T.N[x].lv !== 3) ids.unshift(x); }
+      else ids = [id];
+      ids.forEach(function (i2) { if (keys.indexOf(code + ':' + i2) >= 0) ch2.push({ key: code + ':' + i2, id: i2, nm: nodeNmOf(code, i2) }); });
+    }
+    return { code: code, s: s, chain: ch2 };
+  }
+  /** 帯の段（名前・押した先・▾ の種類） */
+  function crumbModel() {
+    if (!ME || !(S.view === 'home' || S.view === 'status')) return null;
+    var hq = ME.role === 'hq' || ME.role === 'admin', segs = [];
+    if (!CUR) {
+      if (!hq) return null;
+      segs.push({ nm: '全店のいま', go: 'map' });
+      var f = mapFocus();
+      if (f) f.chain.forEach(function (c, i) { segs.push({ nm: c.nm, go: 'mf:' + i, dd: f.area ? (i ? 'anode' : '') : (i ? 'mnode' : 'mstore'), ci: i }); });
+      else segs.push({ nm: '店を選ぶ', go: '', dd: 'mpick', ci: 0, act: true });   // s1125a の検査「帯から店を選べるのは、店を開いたあとだけ」: 何も開いていないときも、帯の ▾ で店を開ける（その店の札のすぐ下に開いて、そこへ送る）
+      return { segs: segs, f: f, map: true };
+    }
+    if (hq) segs.push({ nm: '全店のいま', go: 'map' });
+    var multi = hq || (ME.stores || []).length > 1;
+    if (!(SUM || TREE)) { segs.push({ nm: storeName(CUR), go: '', dd: multi ? 'store' : '', ci: 0 }); return { segs: segs }; }
+    S.path.forEach(function (id, i) { var n = N()[id]; segs.push({ nm: n ? n.n : '…', go: 'cr:' + i, dd: i ? 'node' : multi ? 'store' : '', ci: i }); });
+    return { segs: segs };
+  }
+  var DDT = { store: 'ほかの店に替える（この画面のまま）', mstore: '開いている図の店を、ほかの店に替える', mpick: '店を選んで、その店の図を開く', node: '同じ段のほかの部門・分類に替える', mnode: '同じ段のほかの部門・分類に替える', anode: 'エリアのほかの部門に替える' };
   function pbar() {
     var c = $('#crumb'), m = $('#metric'), up = $('#upbtn');
-    fromChip();
-    var hqPre = ME && (ME.role === 'hq' || ME.role === 'admin') ? '<button type="button" data-view="home-map">全店のいま</button>' + (CUR ? '<span class="sep">›</span>' : '') : '';
-    if ((S.view === 'home' || S.view === 'status') && !CUR && hqPre) {
-      c.innerHTML = '<span class="cur">全店のいま</span>'; up.style.visibility = 'hidden'; m.style.display = '';
-      m.innerHTML = '<span class="lb">見る数</span>' + ['a', 'q', 'c', 'u'].map(function (k) { return '<button type="button" data-m="' + k + '" aria-pressed="' + (S.m === k) + '">' + MK[k].nm + '</button>'; }).join('');
-      return;
+    fromChip(); crumbClose();
+    var md = crumbModel(); CRM = md;
+    if (!md) {
+      c.innerHTML = '<span class="cs cur"><span class="cn">' + esc({ home: 'いまの様子', status: 'いまの様子', admin: '更新の状態', guide: '店舗運営/MDの辞書利用ガイド', month: '今月の型', event: '催事ごと', year: '年間の流れ', dept: '部門ごと', wx: '天気と売れ方' }[S.view] || '') + '</span></span>';
+      up.style.visibility = 'hidden'; m.style.display = 'none'; return;
     }
-    if ((S.view === 'home' || S.view === 'status') && (SUM || TREE)) {
-      c.innerHTML = hqPre + S.path.map(function (id, i) { var n = N()[id]; var nm = n ? n.n : '…'; return (i ? '<span class="sep">›</span>' : '') + (i === S.path.length - 1 ? '<span class="cur">' + esc(nm) + '</span>' : '<button type="button" data-crumb="' + i + '">' + esc(nm) + '</button>'); }).join('');
-      up.style.visibility = S.path.length > 1 ? 'visible' : 'hidden';
-      m.style.display = AN_M[S.an] ? '' : 'none';   // 見る数（売上・販売数・来客数・単価）で替わる分析だけに出す
-      m.innerHTML = '<span class="lb">見る数</span>' + ['a', 'q', 'c', 'u'].map(function (k) { return '<button type="button" data-m="' + k + '" aria-pressed="' + (S.m === k) + '">' + MK[k].nm + '</button>'; }).join('');
-    } else {
-      c.innerHTML = '<span class="cur">' + esc({ home: 'いまの様子', admin: '更新の状態', guide: '店舗運営/MDの辞書利用ガイド', month: '今月の型', event: '催事ごと', year: '年間の流れ', dept: '部門ごと', wx: '天気と売れ方' }[S.view] || '') + '</span>';
-      up.style.visibility = 'hidden'; m.style.display = 'none';
-    }
+    var last = md.segs.length - 1;
+    c.innerHTML = md.segs.map(function (sg, i) {
+      var cur = i === last, t = sg.dd ? DDT[sg.dd] : '';
+      var nm = cur ? (sg.dd ? '<button type="button" class="cn" data-cdd="' + i + '" aria-haspopup="listbox" aria-expanded="false" title="' + esc(t) + '">' + esc(sg.nm) + '<span class="cv" aria-hidden="true">▾</span></button>' : '<span class="cn">' + esc(sg.nm) + '</span>')
+        : '<button type="button" class="cn" ' + (sg.go === 'map' ? 'data-view="home-map"' : 'data-cgo="' + esc(sg.go) + '"') + ' title="' + esc(sg.nm + 'へ') + '">' + esc(sg.nm) + '</button>' + (sg.dd ? '<button type="button" class="cdd" data-cdd="' + i + '" aria-haspopup="listbox" aria-expanded="false" title="' + esc(t) + '" aria-label="' + esc(sg.nm + '：' + t) + '">▾</button>' : '');
+      return (i ? '<span class="sep" aria-hidden="true">›</span>' : '') + '<span class="cs' + (cur ? ' cur' : '') + '">' + nm + '</span>';
+    }).join('');
+    up.style.visibility = CUR && S.path.length > 1 ? 'visible' : 'hidden';
+    m.style.display = md.map || AN_M[S.an] ? '' : 'none';   // 見る数（売上・販売数・来客数・単価）で替わる分析だけに出す
+    m.innerHTML = '<span class="lb">見る数</span>' + ['a', 'q', 'c', 'u'].map(function (k) { return '<button type="button" data-m="' + k + '" aria-pressed="' + (S.m === k) + '" title="見る数を「' + MK[k].nm + '」に（いま見ている所のまま）"><span class="ml">' + MK[k].nm + '</span><span class="ms" aria-hidden="true">' + MKS[k] + '</span></button>'; }).join('');
   }
+  /** ▾ を押した: 同じ段のほかの店・部門の一覧（帯のすぐ下・押した ▾ の左にそろえる）。店が多いときは探す欄（字のゆれを吸収） */
+  function crumbOpen(i, btn) {
+    if (CP.el && CP.i === i) { crumbClose(true); return; }
+    crumbClose();
+    var sg = CRM && CRM.segs[i]; if (!sg || !sg.dd) return;
+    var L = crumbList(sg); if (!L || !L.keys.length) { toast('替えられる物がありません'); return; }
+    var el = document.createElement('div'); el.id = 'cpop'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', L.title);
+    el.innerHTML = '<div class="cph">' + esc(L.title) + '<small>' + esc(L.note) + '</small></div>' + (L.find ? '<input type="search" id="cpq" autocomplete="off" placeholder="' + esc(L.find) + '" aria-label="' + esc(L.find) + '">' : '') +
+      '<div class="cpl" role="listbox" aria-label="' + esc(L.title) + '">' + L.html + '</div>';
+    document.body.appendChild(el);
+    CP = { el: el, kind: sg.dd, i: i, btn: btn, keys: L.keys };
+    btn.setAttribute('aria-expanded', 'true');
+    var r = btn.getBoundingClientRect(), pb = $('#pbar').getBoundingClientRect(), vw = document.documentElement.clientWidth, w = Math.min(380, vw - 16);
+    el.style.width = w + 'px'; el.style.top = Math.round(pb.bottom + 2) + 'px'; el.style.left = Math.round(Math.max(8, Math.min(r.left - 8, vw - w - 8))) + 'px';
+    el.style.maxHeight = Math.max(220, window.innerHeight - pb.bottom - 14) + 'px';
+    var sel = el.querySelector('[aria-selected="true"]'), f = L.find ? el.querySelector('#cpq') : sel || el.querySelector('[data-cpick]');
+    if (sel) sel.scrollIntoView({ block: 'nearest' });
+    if (f) { try { f.focus({ preventScroll: true }); } catch (e) { f.focus(); } }
+  }
+  function crumbClose(back) {
+    if (!CP.el) return; var b = CP.btn; CP.el.remove(); CP = { el: null, kind: '', i: -1, btn: null, keys: null };
+    if (b && b.isConnected) { b.setAttribute('aria-expanded', 'false'); if (back) { try { b.focus({ preventScroll: true }); } catch (e) { /* 古いブラウザ */ } } }
+  }
+  /** 一覧の中身（同じ段の物・いまの物に「いまここ」）。keys＝探す鍵（並びは一覧と同じ） */
+  function crumbList(sg) {
+    var M = ME.map, keys = [], html = '', key = function (t) { return SN ? SN.key(t) : String(t).toLowerCase(); };
+    var opt = function (v, nm, cur, sub, dis, bar) { keys.push({ v: String(v), k: key(nm + ' ' + v) }); return '<button type="button" role="option" class="cpo' + (cur ? ' cur' : '') + '" data-cpick="' + esc(v) + '" aria-selected="' + !!cur + '"' + (dis ? ' disabled' : '') + (bar ? ' style="--dac:' + bar + '"' : '') + '><span>' + esc(nm) + '</span>' + (cur ? '<small class="here">いまここ</small>' : sub ? '<small>' + esc(sub) + '</small>' : '') + '</button>'; };
+    var grp = function (g) { return '<div class="cpg" role="presentation">' + esc(g) + '</div>'; };
+    if (sg.dd === 'store' || sg.dd === 'mstore' || sg.dd === 'mpick') {
+      var cur = sg.dd === 'mpick' ? '' : String(sg.dd === 'store' ? CUR : CRM.f.code), n = 0;
+      if (M && (ME.role === 'hq' || ME.role === 'admin')) {
+        var arn = sg.dd !== 'store' ? mapAr(M) : '', d = sg.dd !== 'store' ? mapDep(M) : '';
+        M.areas.forEach(function (a) {
+          if (arn && a.nm !== arn) return;
+          var ss = a.stores.slice().sort(function (p, q) { return ordOf(p.c) - ordOf(q.c); });   // 正の店の並び（値で並べ替えない）
+          html += grp(a.nm + '（' + ss.length + '店）');
+          ss.forEach(function (s) { var ok = sg.dd === 'store' || !!(S.an === 'tm' ? hmOf(s, d) : mapPick(s, d)); html += opt(s.c, s.nm, String(s.c) === cur, ok ? '' : '数なし', !ok); n++; });
+        });
+      } else (ME.stores || []).forEach(function (c) { html += opt(c, storeName(c), String(c) === cur); n++; });
+      return { title: sg.dd === 'mpick' ? '店を選ぶ' : '店を替える', note: (sg.dd === 'mpick' ? '選んだ店の図を、店の札のすぐ下に開きます' : sg.dd === 'mstore' ? '開いている図を、選んだ店に替えます（見ている所・見る数はそのまま）' : 'この画面（分析・見る数・段）のまま、店だけを替えます') + '。並びは会社で決めた店の順', find: n > 8 ? '名前・よみ・番号で探す' : '', html: html, keys: keys };
+    }
+    var sibs = [], curId = '', what = '部門';
+    if (sg.dd === 'node') {
+      var par = N()[S.path[sg.ci - 1]]; if (!par) return null;
+      curId = S.path[sg.ci]; what = KIDNM[par.lv] || 'クラス';
+      kids(par).forEach(function (x) { sibs.push({ id: x.id, nm: x.n.n, g: x.g || '' }); var al = sg.ci === 1 && x.n.alt && N()[x.n.alt]; if (al) sibs.push({ id: x.n.alt, nm: al.n, g: '' }); });   // 部門の段は、見る範囲の選びと同じ並び（惣菜（ベーカリー除く）など別の切り方も）
+    } else if (sg.dd === 'mnode') {
+      var f = CRM.f, c = f.chain[sg.ci], pc = f.chain[sg.ci - 1], T = treeOf(f.code), s2 = f.s, dsel = mapDep(M), tn = T && T.N[c.id];
+      curId = c.id;
+      if (sg.ci === 1 && !dsel && (!tn || tn.lv === 1)) mapDl(M).forEach(function (z) { if (!z.alt && s2.dp && s2.dp[z.id]) sibs.push({ id: z.id, nm: z.n }); });
+      else if (T) { var pn = pc.id ? T.N[pc.id] : T.N[(s2.dp && s2.dp[dsel] && s2.dp[dsel].same) || dsel]; if (!pn) return null; what = KIDNM[pn.lv] || 'クラス'; kidsT(pn, T.N).forEach(function (x) { sibs.push({ id: x.id, nm: x.n.n, g: x.g || '' }); }); }
+      else return null;
+    } else if (sg.dd === 'anode') {
+      var A = CRM.f.A; curId = CRM.f.chain[1].id;
+      mapDl(M).forEach(function (z) { if (!z.alt && A.co && A.co.dp && A.co.dp[z.id] && A.co.dp[z.id].hm) sibs.push({ id: z.id, nm: z.n }); });
+    }
+    var lastG = null;
+    sibs.forEach(function (x) { if (x.g && x.g !== lastG) { lastG = x.g; html += grp(x.g); } var dc = deptCol(x.nm); html += opt(x.id, x.nm, x.id === curId, '', false, dc ? dc[1] : ''); });
+    return { title: what + 'を替える', note: 'この画面（分析・見る数）のまま、' + what + 'だけを替えます', find: sibs.length > 12 ? '名前・よみで探す' : '', html: html, keys: keys };
+  }
+  /** 一覧を探す（共通の直し方 SearchNorm＝ひらがな・カタカナ・ローマ字・漢字の読みのどれでも）。店の番号は頭の字で */
+  function crumbFind(q) {
+    if (!CP.el) return; q = String(q || '').trim();
+    var t = SN && q ? SN.terms(q) : null, low = q.toLowerCase(), bs = $$('[data-cpick]', CP.el);
+    bs.forEach(function (b, i) { var o = CP.keys[i]; b.hidden = !!q && !((SN ? SN.hit(o.k, t) : o.k.indexOf(low) >= 0) || (/^\d+$/.test(q) && o.v.indexOf(q) === 0)); });
+    $$('.cpg', CP.el).forEach(function (g) { var x = g.nextElementSibling, vis = false; while (x && !x.classList.contains('cpg')) { if (!x.hidden) vis = true; x = x.nextElementSibling; } g.hidden = !vis; });
+  }
+  function crumbPick(v) {
+    var kind = CP.kind, sg = CRM && CRM.segs[CP.i]; ANC0 = sg && kind !== 'mpick' ? ancGet() : null; crumbClose(true); if (!sg) { ANC0 = null; return; }
+    if (kind === 'store') crumbStore(v); else if (kind === 'mstore') mapSwap(v); else if (kind === 'mpick') mapOpen(v); else if (kind === 'node') nodeSwap(sg.ci, v); else mapNodeSwap(sg.ci, v);
+    ANC0 = null;   // 使われなかった時（店の木を待つ・同じ物を選んだ）は捨てる
+  }
+  /** 帯の名前を押した: その段へ（全店のいま・店・部門…）。本部の地図の中では、開いている立体のその段へ（下の段を閉じて、そこまで送る） */
+  function crumbGo(g) {
+    if (g === 'map') {
+      if (!CUR && (S.view === 'home' || S.view === 'status')) { pushHist('scroll'); setBack(); glide(0); return; }
+      pushHist(); useStore(''); S.view = 'home'; S.path = ['S']; S.open = []; render({ top: true }); return;
+    }
+    var p = String(g).split(':'), i = +p[1];
+    if (p[0] === 'cr') { go({ view: 'status', path: S.path.slice(0, i + 1) }, { land: true }); return; }
+    var f = CRM && CRM.f; if (p[0] !== 'mf' || !f || !f.chain[i]) return;
+    var keep = f.chain[i].key, nx = f.chain[i + 1], mo = nx ? moClose(S.mo || [], nx.key) : (S.mo || []).slice(), part = keep.indexOf('A:') === 0 ? '' : 'blk-mcmp';
+    mo = mo.filter(function (k) { return String(k) !== keep; }).concat([keep]);   // その段を「いまいる所」に
+    go({ mo: mo }, { keep: true, part: part, parts: part ? ['blk-mai'] : null });
+    var t = $$('.tmx[data-for]', main).filter(function (x) { return x.getAttribute('data-for') === keep; })[0] || (keep.indexOf('A:') === 0 ? $('#tmareas', main) : null);
+    if (t) glide(window.scrollY + t.getBoundingClientRect().top - stickyH() - 8);
+  }
+  /** 店を替える（店の画面のまま・同じ分析・同じ見る数・同じ段〈同じ番号の部門などがあれば〉・読んでいた所の高さもそのまま）。店の木が手元に無ければ往復1本（前と同じ）・待つ間は、いまの図に待ちの印 */
+  function crumbStore(code) {
+    code = String(code); if (code === String(CUR)) return;
+    var d = DATA[code];
+    if (d && (d.tree || d.sum || d.none)) { storeSwap(code); return; }
+    SWP = code; waitMark(true, storeName(code));
+    var done = function () { if (SWP !== code) return; SWP = ''; waitMark(false); var dd = DATA[code] || {}; if (dd.tree || dd.none) storeSwap(code); else toast('この店の数を受け取れませんでした（' + (dd.err || '通信') + '）。もう一度選んでください。'); };
+    var p = fetchTree(code); if (p) p.then(done, done); else done();
+  }
+  function storeSwap(code) {
+    var a = ancGet(), path = S.path.slice(), open = (S.open || []).slice();
+    pushHist(); useStore(code); S.view = 'status';
+    var all = N(), p2 = ['S']; for (var i = 1; i < path.length; i++) { if (all[path[i]]) p2.push(path[i]); else break; }
+    S.path = p2; S.open = open.filter(function (id) { return !!all[id]; });
+    render({ keep: true, anc: a });
+    ensureTree();
+  }
+  /** 店の画面で、同じ段のほかの部門・分類へ（分析・見る数・読んでいた所の高さはそのまま） */
+  function nodeSwap(pi, id) { if (S.path[pi] === id) return; var a = ancGet(); go({ view: 'status', path: S.path.slice(0, pi).concat([id]) }, { keep: true, anc: a }); }
+  /** 鍵の中の1つの段（店の番号・分類の番号）を付け替える（読んでいた所・開いていた図の鍵を、新しい店・部門の鍵に） */
+  function renTok(a, b) { var re = new RegExp('(^|[:|])' + String(a).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?=$|[:|])', 'g'); return function (k) { return String(k).replace(re, '$1' + b); }; }
+  /** 本部の地図（曜日・時間帯）: 開いている店・部門の札を、その場で替える（店の比較の塊ぜんたいを描き直さない＝札を押したとき〈tmFast〉と同じ速さ・s1125a の速さの表 ⑪ 0.375 秒 → ）。
+   *  古い札の中を閉じ、新しい札のすぐ下に開く（中で開いていた段も mo のとおり開く）。描いた札の表に無ければ false（塊ごと描き直す） */
+  function tmSwapFast(oldKey, newKey, mo) {
+    if (S.an !== 'tm') return false;
+    var tile = function (k) { return k ? $$('.tmt[data-mtog]', main).filter(function (x) { return x.getAttribute('data-mtog') === k; })[0] : null; };
+    var nb = tile(newKey), r = TMN[newKey]; if (!nb || !r) return false;
+    var ob = tile(oldKey);
+    pushHist(); S.mo = mo; NAV0 = null;
+    var O = {}; mo.forEach(function (k) { O[k] = 1; });
+    var shut = function (b, k) { var nx = b.nextElementSibling; if (nx && nx.classList.contains('tmx') && nx.getAttribute('data-for') === k) nx.remove(); };
+    if (ob) { shut(ob, oldKey); ob.setAttribute('aria-expanded', 'false'); ob.classList.remove('open'); var a1 = ob.querySelector('.ar'); if (a1) a1.textContent = '▶'; }
+    shut(nb, newKey);
+    var st = r.nd.H ? tmStat(r.nd.H, r.ctx.hrs) : null, thin = !r.nd.H || tmThin(r.nd.Q);
+    nb.insertAdjacentHTML('afterend', tmOpen(r.nd, r.ctx, O, st, thin));
+    nb.setAttribute('aria-expanded', 'true'); nb.classList.add('open'); var a2 = nb.querySelector('.ar'); if (a2) a2.textContent = '▼';
+    dovDrawAll(); maiRedraw(); c3TipHide(); setBack(); pbar(); fhSchedule();
+    return true;
+  }  /** 本部の地図: 開いている立体の店を替える（同じ部門〈と、その店の木にある段〉まで開いたまま・読んでいた所の高さはそのまま）。木の要る段があって木が無ければ、木を待ってから（往復1本） */
+  function mapSwap(code) {
+    var f = mapFocus(); code = String(code); if (!f || !f.code || f.code === code) return;
+    var T = treeOf(code), s = mapStoreOf(code), deep = f.chain.length > 2 || (f.chain.length > 1 && !!mapDep(ME.map));
+    if (deep && !T && !(DATA[code] && DATA[code].none)) {
+      SWP = code; waitMark(true, s ? s.nm : code);
+      var done = function () { if (SWP !== code) return; SWP = ''; waitMark(false); mapSwapNow(f, code); };
+      var p = fetchTree(code); if (p) { p.then(done, done); return; }
+      SWP = ''; waitMark(false);
+    }
+    mapSwapNow(f, code);
+  }
+  function mapSwapNow(f, code) {
+    var old = f.code, T = treeOf(code), s = mapStoreOf(code), a = ancGet(), ren = renTok(old, code);
+    var mo = (S.mo || []).filter(function (k) { var c = String(k).split(':')[0]; return c !== old && c !== code; }), add = [code];
+    for (var i = 1; i < f.chain.length; i++) { var id = f.chain[i].id, ok = T ? !!T.N[id] : !!(s && s.dp && s.dp[id]); if (!ok) break; add.push(code + ':' + id); }
+    dovRename(ren);
+    if (tmSwapFast(old, code, mo.concat(add))) { ancPut(a, ren); return; }
+    go({ mo: mo.concat(add) }, { keep: true, part: 'blk-mcmp', parts: ['blk-mai'], anc: a, ren: ren });
+  }
+  /** 本部の地図: 帯の「店を選ぶ ▾」で選んだ店を開く（店の札・店の行のすぐ下に開いて、そこへ送る）。開くのは手元の地図の数（往復 0・店の木は裏で） */
+  function mapOpen(code) {
+    code = String(code); var mo = (S.mo || []).filter(function (k) { return String(k).split(':')[0] !== code; }).concat([code]);
+    if (!tmSwapFast('', code, mo)) go({ mo: mo }, { keep: true, part: 'blk-mcmp', parts: ['blk-mai'] });
+    var t = $$('.tmx[data-for]', main).filter(function (x) { return x.getAttribute('data-for') === code; })[0] || $$('[data-mtog]', main).filter(function (x) { return x.getAttribute('data-mtog') === code; })[0];
+    if (t) { glide(window.scrollY + t.getBoundingClientRect().top - stickyH() - 8); t.classList.remove('landed'); void t.offsetWidth; t.classList.add('landed'); }
+  }
+  /** 本部の地図: 開いている立体の部門・分類（エリアの部門も）を、同じ段のほかの物に替える */
+  function mapNodeSwap(ci, id) {
+    var f = mapFocus(); if (!f) return; var c = f.chain[ci]; if (!c || c.id === id) return;
+    var a = ancGet(), nk = (f.area ? 'A:' + f.area : f.code) + ':' + id, part = f.area ? '' : 'blk-mcmp', ren = function (k) { return String(k).split(c.key).join(nk); };
+    dovRename(function (k) { return k === 'tm:' + c.key + '|v' || k === 'tm:' + c.key + '|u' ? 'tm:' + nk + k.slice(k.indexOf('|')) : k; });
+    var mo2 = moClose(S.mo || [], c.key).concat([nk]);
+    if (tmSwapFast(c.key, nk, mo2)) { ancPut(a, ren); return; }
+    go({ mo: mo2 }, { keep: true, part: part, parts: part ? ['blk-mai'] : null, anc: a, ren: ren });
+  }
+  /** 全店のいまの AI のコメント（塊 blk-mai）を、開いている立体に合わせて描き直す。見出しが替わったのに、コメントが画面の外（幅の狭い PC・スマホでは上）なら、替わったことを一言で知らせる */
+  function maiRedraw() {
+    var el = document.getElementById('blk-mai'); if (!el) return;
+    var hd0 = (el.querySelector('.hd') || {}).textContent || ''; redraw('blk-mai');
+    var hd1 = (el.querySelector('.hd') || {}).textContent || '';
+    if (!hd1 || hd1 === hd0) return;
+    // 画面の外かどうかは次のコマで読む（描き替えた直後に位置を読むと、そのたびにページ全体の形の計算が走る＝速さの表 ⑩⑪）
+    requestAnimationFrame(function () {
+      var e2 = document.getElementById('blk-mai'); if (!e2) return; var r = e2.getBoundingClientRect();
+      if (r.bottom < stickyH() + 20 || r.top > window.innerHeight - 40) toast(hd1.replace(/^AI のコメント（/, 'AI のコメントを「').replace(/）$/, '」に替えました（上の AI のコメント）'));
+    });
+  }
+  /** 待ちの印（店の木を受け取る間）: 帯の右に「〇〇を読み込んでいます…」・読んでいた図に薄い幕と字 */
+  function waitMark(on, nm) {
+    $$('.swait', main).forEach(function (x) { x.classList.remove('swait'); x.removeAttribute('data-wait'); }); var w = $('#cwait'); if (w) w.remove();
+    if (!on) return;
+    var a = ancGet(), el = a && a.ch.length ? ancFind(a.ch[0].k) : null;
+    if (el) { el.classList.add('swait'); el.setAttribute('data-wait', nm + 'の数を読み込んでいます…'); }
+    $('#crumb').insertAdjacentHTML('beforeend', '<span id="cwait" class="cwait" role="status"><span class="spin" aria-hidden="true"></span>' + esc(nm) + 'を読み込んでいます…</span>');
+  }
+  // ── 読んでいた所（s1125a）: 帯のすぐ下の線にかかっている図・節（内側の物から）と、その高さ。描き直したあと、同じ鍵の物を同じ高さへ（無ければ外側の物へ）
+  function ancList() {
+    var cnt = {};
+    return $$('.dov[data-dovsk], .c3s, .tmx, .tma, .box.anf, h2.sec[id], h3.mh[id], #lvtop', main).map(function (el) {
+      var cl = el.classList, k;
+      if (cl.contains('dov')) k = 'dov:' + el.getAttribute('data-dovsk');
+      else if (cl.contains('c3s')) { var b = 'c3s:' + (el.getAttribute('data-c3') || 'd'); cnt[b] = (cnt[b] || 0) + 1; k = b + ':' + (cnt[b] - 1); }
+      else if (cl.contains('tmx')) k = 'tmx:' + (el.getAttribute('data-for') || '');
+      else if (cl.contains('tma')) { cnt.tma = (cnt.tma || 0) + 1; k = 'tma:' + (cnt.tma - 1); }
+      else if (cl.contains('anf')) k = 'anf';
+      else k = '#' + el.id;
+      return { el: el, k: k };
+    });
+  }
+  var ANC0 = null;   // 帯の ▾ で選んだ時: 一覧を閉じる前の（形の計算の済んだ）位置を先に読んでおく（閉じた後に読むと、形の計算がもう1回走る）
+  function ancGet() {
+    if (ANC0) { var a0 = ANC0; ANC0 = null; return a0; }
+    if (!main || !main.firstChild) return null;
+    var line = stickyH() + 36, on = [], below = [];
+    ancList().forEach(function (a) { var r = a.el.getBoundingClientRect(); if (!r.height) return; a.off = r.top; if (r.top <= line && r.bottom > line) on.push(a); else if (r.top > line) below.push(a); });
+    on.sort(function (p, q) { return q.off - p.off; }); below.sort(function (p, q) { return p.off - q.off; });
+    return { y: window.scrollY, ch: on.concat(below.slice(0, 2)).slice(0, 8).map(function (a) { return { k: a.k, off: a.off }; }) };
+  }
+  function ancFind(k) { var L = ancList(); for (var i = 0; i < L.length; i++) if (L[i].k === k) return L[i].el; return null; }
+  var ANC = { k: '', d: 0 };   // 試験用: 最後に戻した鍵と、ずれ（px）
+  function ancPut(a, ren) {
+    if (!a || !a.ch) return '';
+    var map = {}; ancList().forEach(function (x) { if (!(x.k in map)) map[x.k] = x.el; });
+    for (var i = 0; i < a.ch.length; i++) {
+      var k = ren ? ren(a.ch[i].k) : a.ch[i].k, el = map[k]; if (!el) continue;
+      var r = el.getBoundingClientRect(); if (!r.height) continue;
+      if (glStop) { glStop(); glStop = null; cancelAnimationFrame(gl); clearTimeout(glT); }
+      window.scrollTo(0, window.scrollY + r.top - a.ch[i].off); ANC.k = k; ANC.d = Math.round(el.getBoundingClientRect().top - a.ch[i].off); return k;
+    }
+    ANC.k = ''; ANC.d = 0; return '';
+  }
+  /** 開いていた「くわしく」（描き直しても開いたまま）。鍵＝id か、題の頭の字＋何番目 */
+  function detKey(d, cnt) {
+    if (d.id && d.id.indexOf('dovtb') === 0) { var dv = d.closest('.dov'); return 'dovtb:' + (dv ? dv.getAttribute('data-dovsk') : ''); }
+    if (d.id) return '#' + d.id;
+    var s = d.querySelector('summary'), t = 'sum:' + (s ? s.textContent.split('（')[0].slice(0, 20) : ''); cnt[t] = (cnt[t] || 0) + 1; return t + ':' + (cnt[t] - 1);
+  }
+  function detOpenKeys() { var cnt = {}, o = {}; $$('details', main).forEach(function (d) { var k = detKey(d, cnt); if (d.open) o[k] = 1; }); return o; }
+  function detReopen(o) { var cnt = {}; $$('details', main).forEach(function (d) { var k = detKey(d, cnt); if (o[k] && !d.open) { d.open = true; if (d.matches('[data-lazy]')) fillLazy(d); if (d.matches('[data-lzf]')) fillLzf(d); } }); }
 
   function viewHome() {
     if (!ME) return '';
@@ -662,12 +945,19 @@ var STORE_ORDER = [
     // 2. 店ごとの値（比べる図・AI のコメントの元）。比べる図のエリアの比較と全社の線は、いつも全社（エリアを選んでも、ほかのエリアと比べられる）
     var rowsAll = all.map(function (s) { var x = mapPick(s, d); return { s: s, x: x, v: mapLens(x, an, m) }; }), rows = arn ? rowsAll.filter(function (r) { return r.s.ar === arn; }) : rowsAll;
     var cmpF = function () { return an === 'tm' && tmHas(M) ? tmCompare(M, d, dn, m, mn, arn) : mapCompare(M, d, dn, m, mn, all, rowsAll, '', arn); };
-    var cmp = cmpF(), ai0 = '';
-    var t = mapText(M, d, dn, m, mn, stores, rows, arn, SC);
-    if (t) {
-      ai0 += '<div class="ai"><div class="hd">AI のコメント（' + esc(AN[an]) + (scopeNm ? '・' + esc(scopeNm) : '') + '）</div><dl><dt>結果</dt><dd>' + esc(t.r) + '</dd><dt>なぜ</dt><dd>' + esc(t.y) + '</dd><dt>すること</dt><dd>' + esc(t.s) + '</dd></dl></div>';
-      if (t.w) { var wx2 = t.w.x, sd = d ? (wx2 && wx2.same) || d : ''; ai0 += '<div class="nx"><b>次の一手</b>: <button type="button" data-store="' + esc(t.w.s.c) + '"' + (sd ? ' data-sdep="' + esc(sd) + '"' : '') + '>' + esc(t.w.s.nm + (dn ? 'の' + dn : '') + 'を開いて、' + AN[an] + 'を' + (dn ? '中分類' : '部門') + 'ごとに見る') + ' ▸</button></div>'; }
-    }
+    var cmp = cmpF();
+    // s1125a（PO 11/25「店舗や部門を選んでも、AIコメントがエリア全体のコメントのままです　これを選んでいる３Dグラフに合わせて、コメントも入れ替わるようにして下さい」）:
+    //   曜日・時間帯で、店・部門（中分類・クラス・エリアの部門）の立体を開いて（選んで）いれば、その立体と見る数のコメントと次の一手。閉じたら見る範囲（全社・エリア・部門）の文に戻る。塊 blk-mai だけを描き直す（往復 0）
+    var aiF = function () {
+      var fo = an === 'tm' && tmHas(M) ? tmFocusText(M, d, m) : null;
+      if (fo) return aiHtml(fo.hd, fo.r, fo.y, fo.s) + (fo.nx || '');
+      var t = mapText(M, d, dn, m, mn, stores, rows, arn, SC), o = '';
+      if (!t) return '';
+      o += '<div class="ai"><div class="hd">AI のコメント（' + esc(AN[an]) + (scopeNm ? '・' + esc(scopeNm) : '') + '）</div><dl><dt>結果</dt><dd>' + esc(t.r) + '</dd><dt>なぜ</dt><dd>' + esc(t.y) + '</dd><dt>すること</dt><dd>' + esc(t.s) + '</dd></dl></div>';
+      if (t.w) { var wx2 = t.w.x, sd = d ? (wx2 && wx2.same) || d : ''; o += '<div class="nx"><b>次の一手</b>: <button type="button" data-store="' + esc(t.w.s.c) + '"' + (sd ? ' data-sdep="' + esc(sd) + '"' : '') + '>' + esc(t.w.s.nm + (dn ? 'の' + dn : '') + 'を開いて、' + AN[an] + 'を' + (dn ? '中分類' : '部門') + 'ごとに見る') + ' ▸</button></div>'; }
+      return o;
+    };
+    var ai1 = aiF(), ai0 = ai1 ? blk('blk-mai', function () { if (ai1 !== null) { var x = ai1; ai1 = null; return x; } return aiF(); }) : '';
     // 3. 店の比較（エリアごと）。店 → 部門 → 中分類 → クラスをその場で開く（行を押すと、この塊だけを描き直す）
     var low0 = cmp.low;
     h += duo(tl0 + cmp.top, ai0, blk('blk-mcmp', function () { if (low0 !== null) { var x = low0; low0 = null; return x; } return cmpF().low; }));
@@ -958,8 +1248,8 @@ var STORE_ORDER = [
     if (nd.H && st && !thin) {
       C3R[key] = { H: nd.H, hrs: ctx.hrs, u: u, nm: tmNm(ctx.k, ctx.lv), who: nd.nm, A: nd.A, C: nd.CC, nd: nd.ND, mul: nd.MUL, q: nd.QZ, per: nd.PER, unm: ctx.lv >= 1 ? '1人あたり売上' : '客単価', cnm: ctx.lv >= 1 ? '買った人の数' : '来客数' };   // s1124a: 立体のすぐ下に客単価の折れ線
       if (nd.X) { C3R[key].X = nd.X; C3R[key].XQ = nd.XQ; C3R[key].xnm = xNm(ctx.k, ctx.lv); }   // s1124b: うち値引き（単価のときは nd.X が無い）
-      o += S.m === 'u' && upMat(C3R[key]) ? upLead(C3R[key]) + '<div class="c3s" data-c3="' + esc(key) + '">' + c3Body(C3R[key], 'u') + '</div>' + c3Cap(C3R[key]) + '<div class="c3s" data-c3="' + esc(key) + '">' + c3Body(C3R[key], 'v') + '</div>'
-        : c3Lead(C3R[key]) + (C3R[key].X ? c3Legend(C3R[key]) : '') + '<div class="c3s" data-c3="' + esc(key) + '">' + c3Body(C3R[key]) + '</div>';
+      o += S.m === 'u' && upMat(C3R[key]) ? upLead(C3R[key]) + '<div class="c3s" data-c3="' + esc(key) + '">' + c3Body(C3R[key], 'u', key) + '</div>' + c3Cap(C3R[key]) + '<div class="c3s" data-c3="' + esc(key) + '">' + c3Body(C3R[key], 'v', key) + '</div>'
+        : c3Lead(C3R[key]) + (C3R[key].X ? c3Legend(C3R[key]) : '') + '<div class="c3s" data-c3="' + esc(key) + '">' + c3Body(C3R[key], '', key) + '</div>';
     } else if (nd.H) o += '<p class="hint"><span class="tg">数が少ない</span> 1時間に1点も売れない時刻が、開いている時刻の半分を超えます。時刻の形は読めないので、曜日の形（1日の計）だけを出しています。</p>' + tmShape(nd.H, nd.D);
     else o += '<p class="hint">この段には、曜日 × 時刻の数がありません。</p>';
     var kd = nd.kids ? nd.kids() : null;
@@ -990,10 +1280,11 @@ var STORE_ORDER = [
     var O = {}; mo.forEach(function (x) { O[x] = 1; });
     var open = !!O[key], nx = b.nextElementSibling;
     if (nx && nx.classList.contains('tmx') && nx.getAttribute('data-for') === key) nx.remove();
-    if (open) { var st = r.nd.H ? tmStat(r.nd.H, r.ctx.hrs) : null, thin = !r.nd.H || tmThin(r.nd.Q); b.insertAdjacentHTML('afterend', tmOpen(r.nd, r.ctx, O, st, thin)); }
+    if (open) { var st = r.nd.H ? tmStat(r.nd.H, r.ctx.hrs) : null, thin = !r.nd.H || tmThin(r.nd.Q); b.insertAdjacentHTML('afterend', tmOpen(r.nd, r.ctx, O, st, thin)); dovDrawAll(); }
     b.setAttribute('aria-expanded', String(open)); b.classList.toggle('open', open);
     var ar = b.querySelector('.ar'); if (ar) ar.textContent = open ? '▼' : '▶';
-    c3TipHide(); setBack(); fhSchedule();
+    if (S.an === 'tm') maiRedraw();   // s1125a: AI のコメントを、いま開いている（選んでいる）立体に合わせる
+    c3TipHide(); setBack(); pbar(); fhSchedule();
     return true;
   }
   /** 店の木の節 → 札の形（中分類より下）。木が届いていなければ、待ちの印 */
@@ -1052,9 +1343,9 @@ var STORE_ORDER = [
       var key = 'tma:' + o.a.nm, on = arn === o.a.nm;
       C3R[key] = { H: o.H, hrs: hrs, u: u, nm: nm0, per: '（1店あたり・1日あたり）', who: o.a.nm, opt: { W: 600, lab: 'short', max: amax }, A: o.A, C: o.C, mul: o.n, q: 0.1, UR: aur, URS: aurs, unm: d ? '1人あたり売上' : '客単価', cnm: d ? '買った人の数' : '来客数' };
       if (o.X) { C3R[key].X = o.X; C3R[key].XQ = o.XQ; C3R[key].xnm = xNm(k, lv); }
-      return '<div class="tma' + (on ? ' sel' : '') + '"><div class="tmah"><b>' + esc(o.a.nm) + '</b> <small>' + o.n + '店の平均' + (on ? '・見る範囲' : '') + '</small></div>' + (m === 'u' && upMat(C3R[key]) ? upLead(C3R[key]) + '<div class="c3s" data-c3="' + esc(key) + '">' + c3Body(C3R[key], 'u') + '</div>' + c3Cap(C3R[key]) + '<div class="c3s" data-c3="' + esc(key) + '">' + c3Body(C3R[key], 'v') + '</div></div>'
-        : c3Lead(C3R[key]) + '<div class="c3s" data-c3="' + esc(key) + '">' + c3Body(C3R[key]) + '</div></div>');
-    }).join('') + '</div>' + (m === 'u' && areas.length ? c3Btns() + c3Legend({ nm: nm0 }, '左右とも同じ目盛り') : '');   // 単価のとき: 立体の棒の釦と凡例は、下の立体のそば（上は客単価の折れ線）
+      return '<div class="tma' + (on ? ' sel' : '') + '"><div class="tmah"><b>' + esc(o.a.nm) + '</b> <small>' + o.n + '店の平均' + (on ? '・見る範囲' : '') + '</small></div>' + (m === 'u' && upMat(C3R[key]) ? upLead(C3R[key]) + '<div class="c3s" data-c3="' + esc(key) + '">' + c3Body(C3R[key], 'u', key, true) + '</div>' + c3Cap(C3R[key]) + '<div class="c3s" data-c3="' + esc(key) + '">' + c3Body(C3R[key], 'v', key, true) + '</div></div>'
+        : c3Lead(C3R[key]) + '<div class="c3s" data-c3="' + esc(key) + '">' + c3Body(C3R[key], '', key, true) + '</div></div>');
+    }).join('') + areas.map(function (o) { var key = 'tma:' + o.a.nm; return ['v', 'u'].map(function (kd) { return DOVO[key + '|' + kd] ? dovPanel(C3R[key], kd, key) : ''; }).join(''); }).join('') + '</div>' + (m === 'u' && areas.length ? c3Btns() + c3Legend({ nm: nm0 }, '左右とも同じ目盛り') : '');   // 単価のとき: 立体の棒の釦と凡例は、下の立体のそば（上は客単価の折れ線）
     if (!areas.length) top += '<div class="hint">この見る範囲には、曜日 × 時刻の数がありません。</div>';
     // エリア → 部門（地図の数・1店あたり・往復 0）。エリアの見方は部門まで（エリアの中分類・クラスの数は無い）
     if (!d && areas.length) {
@@ -1111,7 +1402,38 @@ var STORE_ORDER = [
       s: '形がエリアの真ん中の店と違う店から、その店の形を部門 → クラスまで見る（店の札を押すと、すぐ下に開く）。品出し・作る量・人の手当ての時刻は、その店の峰と折り返しで、売場を見て確かめてから決める（ほかの店の形に合わせるのではない）。',
       w: far && far.dl >= 1 ? { s: far.s, x: d ? mapPick(far.s, d) : null } : null };
   }
-  function storeName(code) { return (ME.names && ME.names[code]) || (DATA[code] && (DATA[code].sum || DATA[code].tree) ? (DATA[code].sum || DATA[code].tree).meta.st.nm : '店 ' + code); }
+  /** 開いている（選んでいる）立体の AI のコメント（s1125a・PO 11/25「これを選んでいる３Dグラフに合わせて、コメントも入れ替わるようにして下さい」）。
+   *  決まった読み方は、全店のいま・店のいまの曜日・時間帯のコメントと同じ（峰・折り返し・いちばん多い所・うち値引きの割合・真ん中の店や上の段との違い／単価のときは客単価の高い・低い時刻）。
+   *  数は、その立体の数だけ（新しい数を作らない）・原因は1つに決めない・全体の傾向を「すること」に写さない（その店の峰と折り返しで、売場を見て確かめる）。エリアの部門だけを開いた所（部門の札の一覧）は見る範囲の文のまま */
+  function tmFocusText(M, d, m) {
+    var f = mapFocus(); if (!f || (f.area && f.chain.length < 2)) return null;
+    var last = f.chain[f.chain.length - 1], r = TMN[last.key]; if (!r) return null;
+    var nd = r.nd, ctx = r.ctx, lv = ctx.lv, who = f.chain.map(function (c) { return c.nm; }).join('・'), u = tmU(ctx.k), mnm = m === 'u' ? (lv >= 1 ? '1人あたり売上' : '客単価') : tmNm(ctx.k, lv);
+    var hd = 'AI のコメント（' + who + '・' + mnm + '・曜日×時刻）', y = '曜日と時刻の形は、まわりの様子（住宅地・道路沿い・農村）と、来るお客様の暮らし方・品ぞろえで変わる。どれが効いているかは、記録だけでは見分けられない。祝日・行事の日は別に考える。';
+    var dep = f.area ? '' : (last.id || ''), nx = f.area ? '' : '<div class="nx"><b>次の一手</b>: <button type="button" data-store="' + esc(f.code) + '"' + (dep ? ' data-sdep="' + esc(dep) + '"' : '') + '>' + esc(who + 'を大きく開いて、AI のコメントとこの段の図を見る') + ' ▸</button></div>';
+    var kidT = nd.kids ? '形の違う' + (nd.kidNm || '下の段') + 'は、すぐ下の札で見る。' : '';
+    if (!nd.H) return { hd: hd, r: who + 'には、' + mnm + 'の曜日 × 時刻の数がありません。', y: y, s: kidT || '上の段の立体で見る。', nx: nx };
+    if (tmThin(nd.Q)) return { hd: hd, r: who + 'は、1時間に1点も売れない時刻が、開いている時刻の半分を超えます（数が少ない）。時刻の形は読めないので、曜日の形（1日の計）だけを見ます。', y: y, s: '時刻ごとの判断はしない。曜日ごとの量だけを、上の段の形と比べて見る。' + kidT, nx: nx };
+    if (m === 'u') {
+      var uo = tmUpObj(nd, ctx, lv); if (!uo || !upMat(uo)) return { hd: hd, r: who + 'には、' + mnm + 'の時刻の数がありません（来客数の時刻の数が無い）。', y: y, s: kidT || '上の段で見る。', nx: nx };
+      var ok = []; uo.UD.forEach(function (v, j) { if (isFinite(v) && !uo.LD[j]) ok.push(j); });
+      var hi = ok.length ? ok.reduce(function (p, j) { return uo.UD[j] > uo.UD[p] ? j : p; }) : -1, lo = ok.length ? ok.reduce(function (p, j) { return uo.UD[j] < uo.UD[p] ? j : p; }) : -1;
+      var A = uo.A || uo.H, D = A.length, sum = function (ks) { var a = 0, c = 0; ks.forEach(function (k) { A[k].forEach(function (v, j) { var cc = uo.C[k][j]; if (isFinite(v) && isFinite(cc)) { a += v; c += cc; } }); }); return c > 0 ? a / c : NaN; }, wr = D === 3 ? sum([1, 2]) / sum([0]) : sum([5, 6]) / sum([0, 1, 2, 3, 4]);
+      var cmpU = upCmpTxt(uo, ctx.uref, ctx.urefNm || '真ん中の店', ctx.ukid);
+      return { hd: hd, r: who + 'の' + mnm + '（曜日を合わせた1日）は' + (hi >= 0 ? ' ' + uo.hrs[hi] + '時がいちばん高く（' + num(uo.UD[hi]) + '円）、' + uo.hrs[lo] + '時がいちばん低い（' + num(uo.UD[lo]) + '円）。' : '、来客の少ない時刻しかありません。') + '1日の' + mnm + 'は ' + num(uo.U0) + '円' + (isFinite(wr) ? '・土日は平日の ' + num(wr, 2) + '倍' : '') + '。' + (cmpU ? cmpU + '。' : ''),
+        y: mnm + 'の時刻の形は、来る人の暮らし方（まとめ買いの時刻・1人で来る時刻）と、その時刻の品ぞろえで変わる。来客の少ない時刻は揺れやすい（白い点）。どれが効いているかは、記録だけでは見分けられない。',
+        s: (hi >= 0 ? who + 'の高い時刻（' + uo.hrs[hi] + '時）に、まとめ買いの品・高い品が手に取りやすい売場になっているかを、売場で確かめる。' : '') + '低い時刻は、来る人と買う物を見てから決める（ほかの店や全店の形に合わせるのではない）。' + kidT, nx: nx };
+    }
+    var H = nd.H, hrs = ctx.hrs, D2 = H.length, WE = c3We(D2), top = null, st = tmStat(H, hrs), ks = function (w) { var a = []; for (var k = 0; k < Math.min(D2, 7); k++) if (WE(k) === w && H[k]) a.push(k); return a; };
+    H.forEach(function (row, k) { row.forEach(function (v, j) { if (isFinite(v) && (!top || v > top.v)) top = { k: k, j: j, v: v }; }); });
+    var rng = function (list, fn) { var ps = list.map(function (k) { return fn(H[k]); }).filter(function (p) { return p >= 0; }).map(function (p) { return hrs[p]; }); if (!ps.length) return ''; var a = Math.min.apply(null, ps), b = Math.max.apply(null, ps); return a === b ? a + '時' : a + '〜' + b + '時'; };
+    var wd = rng(ks(false), maxAt), we = rng(ks(true), maxAt), hwd = rng(ks(false), c3Half), hwe = rng(ks(true), c3Half), wdN = '平日', weN = D2 === 3 ? '土日祝' : '土日';
+    var xs = nd.X ? c3XStat({ H: H, X: nd.X, XQ: nd.XQ }) : null, dg = u === '千円' ? 1 : 0;
+    var res = who + 'の' + mnm + '（1日あたり）は、' + (wd ? wdN + 'の峰 ' + wd : '') + (we ? '・' + weN + 'の峰 ' + we : '') + '。' + (hwd || hwe ? '折り返し（ここで1日の半分）は ' + [hwd ? wdN + ' ' + hwd : '', hwe ? weN + ' ' + hwe : ''].filter(Boolean).join('・') + '。' : '') +
+      (top ? 'いちばん多いのは ' + c3RowNm({ H: H }, top.k) + 'の ' + hrs[top.j] + '時（' + num(top.v, dg || top.v < 10 ? 1 : 0) + u + '）。' : '') + (st ? '1日の計は ' + num(st.tot, st.tot >= 100 ? 0 : 1) + u + '。' : '') +
+      (xs ? 'うち' + xNm(ctx.k, lv) + 'は、ふだんの1日の ' + num(xs.p * 100, 1) + '%。' : '') + (nd.cmp ? '比べると、' + nd.cmp + '。' : '');
+    return { hd: hd, r: res, y: y, s: who + 'の峰（' + [wd ? wdN + ' ' + wd : '', we ? weN + ' ' + we : ''].filter(Boolean).join('・') + '）の前に主力を並べ、折り返し' + (st && isFinite(st.hf) ? '（' + st.hf + '時）' : '') + 'のあとは作る量・品出しを絞るかを、売場を見て確かめてから決める（ほかの店や全店の形に合わせるのではない）。' + kidT, nx: nx };
+  }  function storeName(code) { return (ME.names && ME.names[code]) || (DATA[code] && (DATA[code].sum || DATA[code].tree) ? (DATA[code].sum || DATA[code].tree).meta.st.nm : '店 ' + code); }
   function viewNode(n) {
     var st = meta().st, h = '', hq = ME.role === 'hq' || ME.role === 'admin';
     h += '<h1 class="vt" id="lvtop">' + esc(n.lv === 0 ? n.n + 'のいま' : n.n) + '<small>' + esc(LVNM[n.lv]) + '｜' + esc(st.ar || '') + '・' + esc(st.ty || '') + (n.lv ? '｜' + esc(st.nm) : '') + '</small>' +
@@ -1270,7 +1592,8 @@ var STORE_ORDER = [
   /** 選んだ分析の AI のコメント（この段の数を決まった読み方で文にした物。新しい数は作らない・原因は1つに決めない） */
   function anBox(n) {
     var t = anText(n); if (!t) return '';
-    return '<div class="ai"><div class="hd">AI のコメント（' + esc(AN[S.an]) + '）</div><dl><dt>結果</dt><dd>' + esc(t[0]) + '</dd><dt>なぜ</dt><dd>' + esc(t[1]) + '</dd><dt>すること</dt><dd>' + esc(t[2]) + '</dd></dl></div>';
+    var hd = S.an === 'tm' ? S.path.map(function (id) { var x = N()[id]; return x ? x.n : ''; }).filter(Boolean).join('・') + '・' + mname(S.m, n) + '・曜日×時刻' : AN[S.an];   // s1125a: 曜日・時間帯は、どの店・部門・見る数のコメントかを見出しに（全店のいまの、開いた立体のコメントと同じ形）
+    return '<div class="ai"><div class="hd">AI のコメント（' + esc(hd) + '）</div><dl><dt>結果</dt><dd>' + esc(t[0]) + '</dd><dt>なぜ</dt><dd>' + esc(t[1]) + '</dd><dt>すること</dt><dd>' + esc(t[2]) + '</dd></dl></div>';
   }
   function kidsWith(n, f) { if (!hasKids(n) || !kidsReady(n)) return []; return kids(n).map(function (x) { return { x: x, v: f(x.n) }; }).filter(function (o) { return o.v != null && isFinite(o.v); }); }
   function anText(n) {
@@ -1898,46 +2221,241 @@ var STORE_ORDER = [
     for (var q = 0; q < g.J; q++) { if (q % every && q !== g.J - 1) continue; hl += '<text x="' + hx(j1 + q).toFixed(1) + '" y="' + (base + fz * 1.35).toFixed(1) + '" font-size="' + fz.toFixed(1) + '" text-anchor="middle" fill="#334155">' + hrs[j1 + q] + '時</text>'; }
     return '<svg class="c3u" viewBox="0 0 ' + W + ' ' + HH + '" width="100%" role="img" aria-label="' + esc('平日と土日祝の、時間帯ごとの' + upNm(o) + 'の折れ線（点に矢印を合わせると数）') + '">' + s + ln + dots + lb + hl + '</svg>';
   }
-  /** 曜日ごとの小さな図（s1124b・「曜日ごとに大きく見る」を押したとき）: 月〜日・祝（3行の形は 平日・土・日祝）を1つずつ。どの図も同じ目盛り・1本だけ（平日＝青・土日祝＝橙）・来客の少ない時刻は薄い点 */
-  function upDow(o) {
-    if (!upMat(o)) return '';
-    var D = o.U.length, WE = c3We(D), R = o.URS || upRangeOf([o], false); if (!R) return '';
-    var js = []; for (var j = 0; j < o.hrs.length; j++) if (o.U.some(function (r) { return isFinite(r[j]); })) js.push(j);
-    if (js.length < 2) return '';
-    var W = 260, H = 132, L = 46, Rr = 8, T0 = 10, B = 22, j1 = js[0], j2 = js[js.length - 1];
-    var x = function (j) { return L + (j - j1) / Math.max(1, j2 - j1) * (W - L - Rr); }, yy = function (v) { return T0 + (H - T0 - B) * (1 - (Math.max(R.lo, Math.min(R.hi, v)) - R.lo) / (R.hi - R.lo)); };
-    var out = '';
-    o.U.forEach(function (U, k) {
-      var c = WE(k) ? '#c2620a' : '#1f5fae', LO = o.LO[k], sv = '', run = [];
-      [R.lo, (R.lo + R.hi) / 2, R.hi].forEach(function (t) { sv += '<line x1="' + L + '" x2="' + (W - Rr) + '" y1="' + yy(t).toFixed(1) + '" y2="' + yy(t).toFixed(1) + '" stroke="#e2e8f0"/><text x="' + (L - 4) + '" y="' + (yy(t) + 4).toFixed(1) + '" font-size="11" text-anchor="end" fill="#64748b">' + esc(num(t)) + '</text>'; });
-      if (isFinite(o.U0)) sv += '<line x1="' + L + '" x2="' + (W - Rr) + '" y1="' + yy(o.U0).toFixed(1) + '" y2="' + yy(o.U0).toFixed(1) + '" stroke="#475569" stroke-dasharray="5 3"/>';
-      var flush = function () { if (run.length > 1) sv += '<polyline points="' + run.join(' ') + '" fill="none" stroke="' + c + '" stroke-width="2"/>'; run = []; };
-      for (var j2b = j1; j2b < j2; j2b++) { var a = U[j2b], b = U[j2b + 1]; if (!isFinite(a) || !isFinite(b)) { flush(); continue; } if (LO[j2b] || LO[j2b + 1]) { flush(); sv += '<line x1="' + x(j2b).toFixed(1) + '" y1="' + yy(a).toFixed(1) + '" x2="' + x(j2b + 1).toFixed(1) + '" y2="' + yy(b).toFixed(1) + '" stroke="' + c + '" stroke-width="2" stroke-opacity="0.32" stroke-dasharray="2 3"/>'; continue; } if (!run.length) run.push(x(j2b).toFixed(1) + ',' + yy(a).toFixed(1)); run.push(x(j2b + 1).toFixed(1) + ',' + yy(b).toFixed(1)); }
-      flush();
-      js.forEach(function (jj) { var v = U[jj]; if (!isFinite(v)) return; var lo = LO[jj]; sv += '<g data-u="1" data-k="' + k + '" data-j="' + jj + '"><circle class="v" cx="' + x(jj).toFixed(1) + '" cy="' + yy(v).toFixed(1) + '" r="' + (lo ? 2.4 : 3.2) + '" fill="' + (lo ? '#fff' : c) + '" stroke="' + c + '" stroke-opacity="' + (lo ? 0.45 : 1) + '"/></g>'; });
-      [j1, Math.round((j1 + j2) / 2), j2].forEach(function (jj, i) { sv += '<text x="' + x(jj).toFixed(1) + '" y="' + (H - 6) + '" font-size="11" text-anchor="' + (i === 0 ? 'start' : i === 2 ? 'end' : 'middle') + '" fill="#475569">' + o.hrs[jj] + '時</text>'; });
-      out += '<div class="upd1"><div class="upd1h" style="color:' + c + '">' + esc(c3RowNm(o, k)) + '</div><svg class="c3u c3us" data-row="' + k + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(c3RowNm(o, k) + 'の時間帯ごとの' + upNm(o) + '（点に矢印を合わせると数）') + '">' + sv + '</svg></div>';
-    });
-    return '<div class="updg" role="group" aria-label="' + esc('曜日ごとの' + upNm(o) + '（どの図も同じ目盛り ' + num(R.lo) + '〜' + num(R.hi) + '円）') + '"><p class="hint" style="margin:2px 0 4px">曜日ごとの' + esc(upNm(o)) + '（どの図も同じ目盛り ' + esc(num(R.lo)) + '〜' + esc(num(R.hi)) + '円・点線＝1日の' + esc(upNm(o)) + '・薄い点＝来客が少ない時刻）</p><div class="updgg">' + out + '</div></div>';
+  // ── 曜日ごとに重ねた大きな図（s1125a・PO 11/25「これでは曜日ごとに大きく見えてません　分離しただけです　すべてのグラフを重ねて良いので、大きな一枚のグラフで表示するのです
+  //   曜日祝日の違いは何か淡く色分けするか、なにかわかりやすい方法を使ってください（どちらにしてもホバーは必須ですね）」「客単価だけでなく、すべての項目でこのグラフは大きく重ねて下さい」）。
+  //   部品は1つ（dov）。立体の棒（売上・販売数・来客数〈部門より下は買った人の数〉）にも、客単価（1人あたり売上）の折れ線にも、どの場所（店のいま・全店のいまのエリアの左右・店の札を押した中・部門〜クラス）にも、この部品を使う。
+  //   曜日の線（8本＝月〜日・祝／3行の形は 平日・土・日祝の3本）を、本文の幅いっぱいの1枚に同じ目盛りで重ねる。平日＝青の仲間・土日祝＝橙の仲間（祝日は点線）の2つのまとまり（虹にしない・PO 11/24「このためにグラフを色分けするのはオススメしない」）。
+  //   線の右の端に名前（色だけで見分けさせない）。時刻に矢印を合わせる（スマホは触る）と、その時刻の値を高い順に並べた札・線に近ければ、その線を濃く太く（ほかは薄く）。
+  //   名前の札（上）・線の端の名前を押すと、その線（平日・土日祝のまとまり）を強めたまま。キーボードは図を選んで ← → で時刻・↑ ↓ で曜日・Esc で戻す。数は「表で見る」にも（札だけにしない）。描き直しは図だけ（往復 0）
+  var DOV = { n: 0, g: {} }, DOVO = {};   // g＝描いた図の形（番号 → 形）・DOVO＝開いている図（鍵 → 1）。鍵＝図の箱の鍵（data-c3・店の画面の図は 'd'）＋'|'＋種類（v＝立体の数・u＝客単価）
+  // 線の色（白い地で 3:1 以上）: 平日＝青の仲間（月→金で少しずつ濃く）・土日祝＝橙の仲間。強めた線は同じ仲間の濃い色・太く
+  var DOVC = { wd: ['#5b8bd0', '#5284c9', '#4a7dc2', '#4276bb', '#3a6fb4'], we: ['#d87a35', '#c46a2a', '#cc6d24'], wdD: '#163f7d', weD: '#8a3f05' };
+  function dovCol(D, k) { return D === 3 ? (k ? DOVC.we[k - 1] : DOVC.wd[2]) : k >= 5 ? DOVC.we[k - 5] : DOVC.wd[k]; }
+  function dovShort(D, k) { return D === 3 ? RL3[k] : DOW8[k]; }   // 線の端の名前（月・火…祝／平日・土・日祝）
+  function dovLong(D, k) { return D === 3 ? RN3[k] : dayNm(k); }
+  function dovHoli(D, k) { return D !== 3 && k === 7; }   // 祝日の線は点線（同じ橙の仲間の中で、形でも分ける）
+  /** 目盛り（0 から）: 1・2・2.5・5 の刻みで5つ以下 */
+  function dovNice(mx) { var p = Math.pow(10, Math.floor(Math.log(mx) / Math.LN10)), st = [1, 2, 2.5, 5, 10].map(function (f) { return f * p; }).filter(function (x) { return mx / x <= 5; })[0] || 10 * p; return { lo: 0, hi: Math.ceil(mx / st - 1e-9) * st, st: st }; }
+  /** 図の元 o と種類から、描く物（行・名前・単位・目盛り・点線の物差し・札に添える来客数） */
+  function dovSpec(o, kind) {
+    if (!o || !o.H || !o.H.length || !o.hrs) return null;
+    var D = o.H.length, hrs = o.hrs;
+    if (kind === 'u') {
+      if (!upMat(o)) return null;
+      var R = o.URS || upRangeOf([o], false); if (!R) return null;   // エリアの左右は、左右とも同じ目盛り（URS）
+      return { kind: 'u', nd: o.nd, rows: o.U, lo: o.LO, D: D, hrs: hrs, nm: upNm(o), u: '円', lo0: R.lo, hi0: R.hi, st: R.st, ref: { v: o.U0, nm: '1日の' + upNm(o) }, C: o.C, cnm: o.cnm || '来客数', who: o.who || '', per: '売上 ÷ ' + (o.cnm || '来客数'),
+        fmt: function (v) { return num(v); }, tick: function (t) { return num(t); } };
+    }
+    var rows = o.H, w = D === 3 ? [5, 1, 1] : [1, 1, 1, 1, 1, 1, 1], ref = [], mx = 0, any = false;
+    for (var j = 0; j < hrs.length; j++) { var t = 0; for (var k = 0; k < w.length && k < D; k++) { var v = rows[k] && rows[k][j]; if (isFinite(v)) t += v * w[k]; } ref.push(t / 7); }   // ふだんの1日（月〜日の平均・3行の形は 平日×5＋土＋日祝 を 7 で割る・祝日の行は入れない＝札の「1日の計」と同じ）
+    rows.forEach(function (r) { (r || []).forEach(function (x) { if (isFinite(x)) { any = true; if (x > mx) mx = x; } }); });
+    if (!any || !(mx > 0)) return null;
+    if (o.opt && o.opt.max > mx) mx = o.opt.max;   // 同じ図の仲間（エリアの左右）は同じ目盛り
+    var R2 = dovNice(mx), isC = /来客|買った人/.test(o.nm || ''), dg = o.u === '千円' ? 1 : 0;
+    return { kind: 'v', nd: o.nd, rows: rows, lo: null, D: D, hrs: hrs, nm: o.nm || '', u: o.u || '', lo0: 0, hi0: R2.hi, st: R2.st, ref: { arr: ref, nm: 'ふだんの1日（' + (D === 3 ? '平日×5・土・日祝' : '月〜日') + 'の平均）' }, C: isC ? null : o.C, cnm: o.cnm || '来客数', who: o.who || '', per: (o.per || '（1日あたり）').replace(/[（）]/g, ''),
+      fmt: function (x) { return num(x, dg || (x < 10 && x !== 0) ? 1 : 0); }, tick: function (x) { return num(x, R2.st < 1 ? 1 : 0); } };
   }
-  /** 「曜日ごとに大きく見る」: 押した釦のすぐ下に、曜日ごとの小さな図（もう一度で閉じる）。図の元は、釦のある図の箱（data-c3）か、店の画面の図（C3.d） */
-  function upDowToggle(b) {
-    var nx = b.nextElementSibling, open = !(nx && nx.classList.contains('updg'));
-    if (!open) nx.remove();
-    else { var host = b.closest('[data-c3]'), o = host ? C3R[host.getAttribute('data-c3')] : C3.d; b.insertAdjacentHTML('afterend', upDow(o) || '<p class="hint updg">曜日ごとの数がありません。</p>'); }
-    b.setAttribute('aria-expanded', String(open)); b.textContent = open ? '曜日ごとの図を閉じる ▴' : '曜日ごとに大きく見る ▸';
+  /** 開く釦（図のすぐ下）。開いていれば、すぐ下に図（pe＝図をエリアの左右の下に置く所では、釦だけ） */
+  function dovBtn(o, kind, key, pe) {
+    if (!o || (kind === 'u' ? !(o.C && upMat(o)) : !o.H)) return '';
+    var sk = key + '|' + kind, op = !!DOVO[sk];
+    return '<button type="button" class="dovb" data-dovt="' + kind + '" data-dovkey="' + esc(key) + '" aria-expanded="' + op + '">' + dovBtnTxt(kind === 'u' ? upNm(o) : o.nm, op) + '</button>' + (op && !pe ? dovPanel(o, kind, key) : '');
+  }
+  function dovBtnTxt(nm, op) { return op ? '曜日ごとの図を閉じる（' + esc(nm) + '）▴' : '曜日ごとに重ねて大きく見る（' + esc(nm) + '）▸'; }
+  /** 図の箱（中の SVG は、置いてから幅を測って描く＝dovDraw） */
+  function dovPanel(o, kind, key) {
+    var sp = dovSpec(o, kind), sk = key + '|' + kind;
+    if (!sp) return '<div class="dov none" data-dovsk="' + esc(sk) + '"><p class="hint" style="margin:0">曜日ごとの数がありません。</p></div>';
+    var id = ++DOV.n, D = sp.D, ks = []; DOV.g[id] = sp; sp.sk = sk; for (var k = 0; k < D; k++) ks.push(k);
+    var chip = function (k2) { return '<button type="button" data-dovp="k' + k2 + '" aria-pressed="false" title="' + esc(dovLong(D, k2) + 'の線を強めたままにします（もう一度押すと戻す）') + '"><i' + (dovHoli(D, k2) ? ' class="ds"' : '') + ' style="--c:' + dovCol(D, k2) + '"></i>' + esc(dovShort(D, k2)) + '</button>'; };
+    var title = (sp.who ? sp.who + '｜' : '') + '曜日ごとの' + sp.nm, sub = '（' + sp.u + '・' + sp.per + '・' + D + '本の線を同じ目盛りに重ねた図）';
+    return '<div class="dov" data-dov="' + id + '" data-dovsk="' + esc(sk) + '"><div class="dovh"><b>' + esc(title) + '</b><span>' + esc(sub) + '</span></div>' + dovLead(sp) +
+      '<div class="dovc" role="group" aria-label="強める線"><span class="gl">強める線</span><button type="button" data-dovp="g0" aria-pressed="false"><i style="--c:' + DOVC.wd[2] + '"></i>' + (D === 3 ? '平日' : '平日（月〜金）') + '</button><button type="button" data-dovp="g1" aria-pressed="false"><i style="--c:' + DOVC.we[0] + '"></i>' + (D === 3 ? '土・日祝' : '土日祝') + '</button><span class="gl">｜</span>' + ks.map(chip).join('') +
+      '<span class="rf"><i class="ds" style="--c:#334155"></i>点線＝' + esc(sp.ref.nm) + '</span>' + (sp.lo ? '<span class="rf"><i class="lo"></i>白い点＝来客が少ない時刻（揺れやすい）</span>' : '') + '</div>' +
+      '<p class="hint dovhint">線か時刻にマウスを置く（スマホは図に触る）と、その時刻の値が高い順に出て、近い線が濃く太くなります。上の札か線の端の名前を押すと、その線を強めたままにします（もう一度押すと戻す）。キーボードは図を選んで ← → で時刻・↑ ↓ で曜日・Esc で戻す。' + '</p>' +
+      '<div class="dovw"><svg class="dovs" tabindex="0" role="img" aria-label="' + esc(title + '（' + D + '本の折れ線を重ねた図・数は下の「表で見る」にもあります）') + '"></svg><div class="dovt" aria-hidden="true"></div><span class="sr" aria-live="polite"></span></div>' +
+      lazyBox('dovtb' + id, '表で見る（' + sp.nm + '・曜日 × 時刻・' + sp.u + '）', function () { return dovTable(sp); }) + '</div>';
+  }
+  /** 図の結論の一文（認知の決まり9）: いちばん高い所・平日と土日祝の峰（客単価は来客の少ない時刻を除く）・1日あたりの日数（何日の平均か） */
+  function dovLead(sp) {
+    var D = sp.D, WE = c3We(D), top = null, js = dovHours(sp), pk = function (w) { var hs = []; for (var k = 0; k < D; k++) { if (WE(k) !== w || (D === 8 && k === 7)) continue; var b = -1; js.forEach(function (j) { var v = sp.rows[k] && sp.rows[k][j]; if (isFinite(v) && !(sp.lo && sp.lo[k][j]) && (b < 0 || v > sp.rows[k][b])) b = j; }); if (b >= 0) hs.push(sp.hrs[b]); } if (!hs.length) return ''; var a = Math.min.apply(null, hs), c = Math.max.apply(null, hs); return a === c ? a + '時' : a + '〜' + c + '時'; };
+    for (var k = 0; k < D; k++) js.forEach(function (j) { var v = sp.rows[k] && sp.rows[k][j]; if (isFinite(v) && !(sp.lo && sp.lo[k][j]) && (!top || v > top.v)) top = { k: k, j: j, v: v }; });
+    if (!top) return '';
+    var wd = pk(false), we = pk(true), nd = sp.nd, dn = nd && nd.length === D ? (D === 3 ? '平日 ' + nd[0] + '日・土 ' + nd[1] + '日・日祝 ' + nd[2] + '日' : (nd.slice(0, 7).every(function (x) { return x === nd[0]; }) ? '月〜日 ' + nd[0] + '日ずつ' : DOW8.slice(0, 7).map(function (d, i) { return d + ' ' + nd[i] + '日'; }).join('・')) + '・祝日 ' + nd[7] + '日') : '';
+    return '<p class="c3k dovk">' + (sp.kind === 'u' ? 'いちばん高いのは ' : 'いちばん多いのは ') + '<b>' + esc(dovLong(D, top.k) + 'の ' + sp.hrs[top.j] + '時') + '</b>（' + esc(sp.fmt(top.v) + sp.u) + '）。' + (wd ? (sp.kind === 'u' ? '高い時刻は' : '峰は') + ' 平日 <b>' + esc(wd) + '</b>' + (we ? '・' + (D === 3 ? '土・日祝' : '土日') + ' <b>' + esc(we) + '</b>' : '') + '。' : '') +
+      (sp.kind === 'u' ? '来客の少ない時刻は除いて読んでいます。' : '') + (dn ? '<small>1日あたり＝その曜日の日数で割った数（' + esc(dn) + '）</small>' : '') + '</p>';
+  }
+  /** 同じ数の表（札だけにしない） */
+  function dovTable(sp) {
+    var js = dovHours(sp), D = sp.D, rows = '';
+    for (var k = 0; k < D; k++) rows += '<tr><td>' + esc(dovLong(D, k)) + '</td>' + js.map(function (j) { var v = sp.rows[k] && sp.rows[k][j], lo = sp.lo && sp.lo[k] && sp.lo[k][j]; return '<td class="n' + (lo ? ' ulo' : '') + '"' + (lo ? ' title="来客が少ない時刻"' : '') + '>' + (isFinite(v) ? esc(sp.fmt(v)) : '―') + '</td>'; }).join('') + '</tr>';
+    // 左の列は短い名前だけ（s1125a・幅 375 で「ふだんの1日（月〜日の平均）」が左の列を枠の 8割にして、数字が見えなかった＝ui_check 項目 8）。かっこの中は表の下の一言へ
+    var rnm = sp.ref.nm.replace(/（.*$/, ''), rdef = sp.ref.nm !== rnm ? rnm + '＝' + sp.ref.nm.slice(rnm.length + 1).replace(/）$/, '') + '。' : '';
+    rows += '<tr><td>' + esc(rnm) + '</td>' + js.map(function (j) { var v = sp.ref.arr ? sp.ref.arr[j] : sp.ref.v; return '<td class="n">' + (isFinite(v) ? esc(sp.fmt(v)) : '―') + '</td>'; }).join('') + '</tr>';
+    return table([D === 3 ? '日' : '曜日'].concat(js.map(function (j) { return sp.hrs[j] + '時'; })), rows, false) + (rdef || sp.lo ? '<p class="hint">' + esc(rdef) + (sp.lo ? '斜めの字＝来客が少ない時刻（揺れやすい）。' : '') + '</p>' : '');
+  }
+  function dovHours(sp) { var js = []; for (var j = 0; j < sp.hrs.length; j++) if (sp.rows.some(function (r) { var v = r && r[j]; return isFinite(v) && (sp.kind === 'u' || v > 0); })) js.push(j); return js; }
+  /** 図を描く（箱の幅に合わせて・字は 14px のまま）。幅が変わったときだけ描き直す */
+  function dovDraw(el, force, w0) {
+    var sp = DOV.g[el.getAttribute('data-dov')], wr = el.querySelector('.dovw'), svg = el.querySelector('svg.dovs'); if (!sp || !wr || !svg) return;
+    var W = w0 > 0 ? w0 : Math.round(wr.clientWidth); if (!(W > 0) || (!force && sp.W === W)) return;
+    DOVWC[dovWKey(el)] = W;
+    var js = dovHours(sp); if (js.length < 2) { wr.innerHTML = '<p class="hint">曜日ごとの数がありません。</p>'; return; }
+    var nar = W < 600, D = sp.D, WE = c3We(D), j1 = js[0], j2 = js[js.length - 1], L = 58, Rm = nar ? 50 : 62, T = 22, B = 30, H = nar ? 300 : Math.max(380, Math.min(560, Math.round(W * 0.42)));
+    el.classList.toggle('nar', nar);
+    var X = function (j) { return L + (j - j1) / (j2 - j1) * (W - L - Rm); }, lo0 = sp.lo0, hi0 = sp.hi0;
+    var Y = function (v) { return T + (H - T - B) * (1 - (Math.max(lo0, Math.min(hi0, v)) - lo0) / (hi0 - lo0)); };
+    var f1 = function (x) { return x.toFixed(1); }, s = '';
+    for (var t = lo0; t <= hi0 + 1e-9; t += sp.st) s += '<line x1="' + L + '" x2="' + f1(W - Rm + 4) + '" y1="' + f1(Y(t)) + '" y2="' + f1(Y(t)) + '" stroke="' + (t === 0 ? '#94a3b8' : '#e2e8f0') + '"/><text x="' + (L - 7) + '" y="' + f1(Y(t) + 4.5) + '" font-size="13" text-anchor="end" fill="#475569">' + esc(sp.tick(t)) + '</text>';
+    s += '<text x="' + (L - 7) + '" y="' + (T - 9) + '" font-size="12.5" text-anchor="end" fill="#475569">' + esc(sp.u) + '</text>';
+    var every = Math.max(1, Math.ceil(40 / ((W - L - Rm) / (j2 - j1))));   // 時刻の字が重ならない間引き（字の幅 約 30px）
+    for (var q = j1; q <= j2; q++) if (!((q - j1) % every) || q === j2) s += '<text x="' + f1(X(q)) + '" y="' + (H - 9) + '" font-size="13" text-anchor="middle" fill="#334155">' + esc(sp.hrs[q]) + '時</text>';
+    if (sp.ref.arr) { var rp = js.filter(function (j) { return isFinite(sp.ref.arr[j]); }).map(function (j) { return f1(X(j)) + ',' + f1(Y(sp.ref.arr[j])); }); if (rp.length > 1) s += '<polyline class="rfl" points="' + rp.join(' ') + '"/>'; }
+    else if (isFinite(sp.ref.v)) s += '<line class="rfl" x1="' + L + '" x2="' + f1(W - Rm) + '" y1="' + f1(Y(sp.ref.v)) + '" y2="' + f1(Y(sp.ref.v)) + '"/>';
+    // 点線の名前と値（凡例だけにしない・図の中の点線のそば）: 客単価＝線の左の端の上／ふだんの1日＝いちばん高い時刻の上
+    var rj = sp.ref.arr ? js.reduce(function (p2, j) { return isFinite(sp.ref.arr[j]) && (p2 < 0 || sp.ref.arr[j] > sp.ref.arr[p2]) ? j : p2; }, -1) : j1, rv0 = sp.ref.arr ? (rj >= 0 ? sp.ref.arr[rj] : NaN) : sp.ref.v;
+    if (isFinite(rv0)) s += '<text class="rft" x="' + f1(sp.ref.arr ? X(rj) : L + 6) + '" y="' + f1(Y(rv0) - 7) + '" text-anchor="' + (sp.ref.arr ? 'middle' : 'start') + '">' + esc(sp.ref.nm.replace(/（.*$/, '') + ' ' + sp.fmt(rv0) + sp.u) + '</text>';
+    var py = [], gl = '', labs = [];
+    for (var k = 0; k < D; k++) {
+      var r = sp.rows[k] || [], LO = sp.lo ? sp.lo[k] : null, run = [], seg = '', pts = '', yk = {};
+      var flush = function () { if (run.length > 1) seg += '<polyline points="' + run.join(' ') + '"/>'; run = []; };
+      for (var j = j1; j <= j2; j++) if (isFinite(r[j])) yk[j] = Y(r[j]);
+      for (j = j1; j < j2; j++) {
+        if (!isFinite(r[j]) || !isFinite(r[j + 1])) { flush(); continue; }
+        if (LO && (LO[j] || LO[j + 1])) { flush(); seg += '<line class="lo" x1="' + f1(X(j)) + '" y1="' + f1(yk[j]) + '" x2="' + f1(X(j + 1)) + '" y2="' + f1(yk[j + 1]) + '"/>'; continue; }
+        if (!run.length) run.push(f1(X(j)) + ',' + f1(yk[j])); run.push(f1(X(j + 1)) + ',' + f1(yk[j + 1]));
+      }
+      flush();
+      for (j = j1; j <= j2; j++) if (yk[j] !== undefined) pts += '<circle' + (LO && LO[j] ? ' class="lo"' : '') + ' cx="' + f1(X(j)) + '" cy="' + f1(yk[j]) + '" r="3"/>';
+      gl += '<g class="dl' + (dovHoli(D, k) ? ' ho' : '') + '" data-dk="' + k + '" style="--c:' + dovCol(D, k) + ';--cd:' + (WE(k) ? DOVC.weD : DOVC.wdD) + '">' + seg + pts + '</g>';
+      py.push(yk);
+    }
+    // 線の名前（s1125a の検査「名前が 21時の1点に積まれ、どの線か位置で分からない」）: 名前はいつも右の余白に縦に並べる（図の中に字を置かない）。
+    //   右の端で線どうしが離れていれば、端の点の高さに置き、細い線でつなぐ。閉店の前などで全部の線が1点に集まるときは、線どうしが離れている最後の時刻（○時）の高い順に、上から並べる（凡例と同じ・つなぐ線は引かない）
+    var aj = -1;
+    for (var ix = js.length - 1; ix >= 0 && aj < 0; ix--) {
+      var ys = []; py.forEach(function (yk2, k3) { if (yk2[js[ix]] !== undefined && !(sp.lo && sp.lo[k3] && sp.lo[k3][js[ix]])) ys.push(yk2[js[ix]]); });
+      if (ys.length >= Math.ceil(D * 0.75) && Math.max.apply(null, ys) - Math.min.apply(null, ys) >= Math.min(36, (D - 1) * 12)) aj = js[ix];
+    }
+    if (aj < 0) aj = j2;
+    var atEnd = aj === j2;
+    py.forEach(function (yk2, k3) { var jj = yk2[aj] !== undefined ? aj : -1; for (var q2 = js.length - 1; jj < 0 && q2 >= 0; q2--) if (yk2[js[q2]] !== undefined) jj = js[q2]; if (jj >= 0) labs.push({ k: k3, x: X(jj), y0: yk2[jj], y: yk2[jj], at: atEnd && jj === j2 }); });
+    labs.sort(function (a, b) { return a.y - b.y; });
+    if (atEnd) {   // 端の点の高さに・重ならないように上下にずらす（はみ出す分は上へ戻す）
+      for (var i = 1; i < labs.length; i++) if (labs[i].y - labs[i - 1].y < 17) labs[i].y = labs[i - 1].y + 17;
+      if (labs.length) { labs[labs.length - 1].y = Math.min(labs[labs.length - 1].y, H - B + 4); for (i = labs.length - 2; i >= 0; i--) labs[i].y = Math.min(labs[i].y, labs[i + 1].y - 17); }
+    } else labs.forEach(function (l, i2) { l.y = T + 12 + i2 * 17; });
+    var lx = W - Rm + 8; labs.forEach(function (l) { l.lx = lx; });
+    if (!atEnd) s += '<text class="lbh" x="' + (W - 2) + '" y="' + f1(T - 4) + '" text-anchor="end">' + esc(sp.hrs[aj]) + '時の高い順</text>';    var lb = labs.map(function (l) { return '<g class="dlb' + (dovHoli(D, l.k) ? ' ho' : '') + '" data-dk="' + l.k + '" style="--c:' + dovCol(D, l.k) + ';--cd:' + (WE(l.k) ? DOVC.weD : DOVC.wdD) + '">' + (l.at ? '<line class="ld" x1="' + f1(l.x + 4) + '" y1="' + f1(l.y0) + '" x2="' + f1(lx - 1) + '" y2="' + f1(l.y) + '"/>' : '') + '<line class="sw" x1="' + f1(lx) + '" x2="' + f1(lx + 12) + '" y1="' + f1(l.y) + '" y2="' + f1(l.y) + '"/><rect x="' + f1(lx - 3) + '" y="' + f1(l.y - 9) + '" width="42" height="18" fill="transparent"/><text x="' + f1(lx + 15) + '" y="' + f1(l.y + 4.5) + '">' + esc(dovShort(D, l.k)) + '</text></g>'; }).join('');   // 線の端の名前（短い線の見本つき＝凡例と同じ形・押すと強めたまま）
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H); svg.setAttribute('width', W); svg.setAttribute('height', H);
+    svg.innerHTML = s + gl + lb + '<line class="xh" x1="0" x2="0" y1="' + T + '" y2="' + (H - B) + '" visibility="hidden"/>';
+    sp.W = W; sp.H = H; sp.X = X; sp.js = js; sp.py = py; sp.L = L; sp.Rm = Rm; sp.T = T; sp.B = B; sp.nar = nar; sp.labs = labs; sp.hj = -1; sp.aj = aj;
+    if (!svg.__dov) { svg.__dov = 1; svg.addEventListener('pointermove', dovMove); svg.addEventListener('pointerdown', dovMove); svg.addEventListener('pointerleave', dovLeave); svg.addEventListener('keydown', dovKey); svg.addEventListener('focus', dovFocus); svg.addEventListener('blur', dovLeave); svg.addEventListener('click', dovClick); }
+    dovEm(el, sp, -1); dovTipIdle(el, sp);
+  }
+  /** 描いた図を全部、箱の幅に合わせる（置いた直後・描き直した後・幅が変わった後）。外れた図の形は捨てる */
+  // 描き直しの速さ（s1125a の速さの表 ⑥: 帯の ▾ で部門を替えると、開いたままの重ねた図の数だけ「幅を読む → 描く」をくり返し、そのたびにページ全体の形の計算が走っていた）:
+  //   同じ置き場（data-dovsk）の図は、前に描いた幅で先に描き、本当の幅は次のコマ（どのみち形を計算する所）でまとめて読む。違っていたら、その図だけ描き直す
+  //   覚える鍵は置き場の形（全店のいまの札は、どの店の札でも同じ幅＝店の番号を除いた段の深さ）
+  var DOVWC = {}, DOVCK = 0;
+  function dovWKey(el) { return String(el.getAttribute('data-dovsk') || '').replace(/^tm:([^|]*)/, function (m, p) { return 'tm#' + p.split(':').length + (p.indexOf('A:') === 0 ? 'A' : ''); }); }
+  function dovDrawAll(force) {
+    var live = {}, els = $$('.dov[data-dov]', main), ws = els.map(function (el) { return force ? 0 : (DOVWC[dovWKey(el)] || 0); });
+    if (ws.some(function (w) { return !w; })) ws = els.map(function (el) { var wr = el.querySelector('.dovw'); return wr ? Math.round(wr.clientWidth) : 0; });   // 初めての置き場があれば、全部の幅を1回でまとめて読む
+    els.forEach(function (el, i) { live[el.getAttribute('data-dov')] = 1; dovDraw(el, force, ws[i]); });
+    for (var id in DOV.g) if (!live[id]) delete DOV.g[id];
+    if (els.length && !DOVCK) DOVCK = requestAnimationFrame(function () { DOVCK = 0; $$('.dov[data-dov]', main).forEach(function (el) { dovDraw(el, false); }); });   // 本当の幅で確かめる（同じなら何もしない）
+  }
+  function dovOf(svg) { var el = svg.closest('.dov'); return el ? { el: el, sp: DOV.g[el.getAttribute('data-dov')] } : null; }
+  function dovPin(el) { var p = el.getAttribute('data-pin') || ''; return p ? { k: p.charAt(0) === 'k' ? +p.slice(1) : -1, g: p.charAt(0) === 'g' ? +p.slice(1) : -1 } : { k: -1, g: -1 }; }
+  /** 強める: hk＝矢印の近い線（−1＝無い）。無ければ、押して強めたまま（pin）の線・まとまり */
+  function dovEm(el, sp, hk) {
+    var svg = el.querySelector('svg.dovs'); if (!svg || !sp) return;
+    var pn = dovPin(el), k0 = hk >= 0 ? hk : pn.k, g0 = hk >= 0 ? -1 : pn.g, WE = c3We(sp.D), on = function (k) { return k0 >= 0 ? k === k0 : g0 >= 0 ? (WE(k) ? 1 : 0) === g0 : false; };
+    svg.classList.toggle('em', k0 >= 0 || g0 >= 0);
+    $$('g.dl, g.dlb', svg).forEach(function (g) { g.classList.toggle('on', on(+g.getAttribute('data-dk'))); });
+    if (k0 >= 0) { var g1 = svg.querySelector('g.dl[data-dk="' + k0 + '"]'), lb = svg.querySelector('g.dlb'); if (g1 && lb && g1.nextElementSibling !== lb) svg.insertBefore(g1, lb); }   // 強めた線を、ほかの線の上に
+    sp.hk = hk;
+  }
+  /** その時刻の札（値の高い順・曜日の名前・値・来客数）と縦の線 */
+  function dovShow(el, sp, j, hk) {
+    var svg = el.querySelector('svg.dovs'), xh = svg && svg.querySelector('line.xh'), tip = el.querySelector('.dovt'); if (!xh || !tip) return;
+    sp.hj = j; dovEm(el, sp, hk);
+    var x = sp.X(j); xh.setAttribute('x1', x.toFixed(1)); xh.setAttribute('x2', x.toFixed(1)); xh.setAttribute('visibility', 'visible');
+    var D = sp.D, ks = [], pn = dovPin(el), WE = c3We(D);
+    for (var k = 0; k < D; k++) { var v = sp.rows[k] && sp.rows[k][j]; if (isFinite(v)) ks.push(k); }
+    ks.sort(function (a, b) { return sp.rows[b][j] - sp.rows[a][j]; });
+    var emk = hk >= 0 ? hk : pn.k, rv = sp.ref.arr ? sp.ref.arr[j] : sp.ref.v;
+    tip.innerHTML = '<b>' + esc((sp.who ? sp.who + '｜' : '') + sp.hrs[j] + '時の' + sp.nm + '（高い順）') + '</b>' + ks.map(function (k2) {
+      var c = sp.C && sp.C[k2] ? sp.C[k2][j] : NaN, lo = sp.lo && sp.lo[k2] && sp.lo[k2][j], hot = k2 === emk || (emk < 0 && pn.g >= 0 && (WE(k2) ? 1 : 0) === pn.g);
+      return '<span class="nm' + (hot ? ' on' : '') + '"><i' + (dovHoli(D, k2) ? ' class="ds"' : '') + ' style="--c:' + dovCol(D, k2) + '"></i><span class="l">' + esc(dovLong(D, k2)) + '</span><span class="s">' + esc(dovShort(D, k2)) + '</span></span><em' + (hot ? ' class="on"' : '') + '>' + esc(sp.fmt(sp.rows[k2][j]) + sp.u) + '</em><small' + (hot ? ' class="on"' : '') + '>' + (isFinite(c) ? '<span class="l">' + esc(sp.cnm) + ' </span>' + esc(num(c, c < 10 ? 1 : 0) + '人') : '') + (lo ? '<span class="lo">・来客が少ない</span>' : '') + '</small>';
+    }).join('') + (isFinite(rv) ? '<span class="ft">' + esc(sp.ref.nm + ' ' + sp.fmt(rv) + sp.u) + '</span>' : '');
+    tip.classList.add('on');
+    if (!sp.nar) { var tw = tip.offsetWidth, left = x < sp.L + (sp.W - sp.L - sp.Rm) / 2; tip.style.left = Math.max(0, left ? Math.max(x + 24, sp.W - sp.Rm - tw - 4) : Math.min(x - 24 - tw, sp.L + 4)) + 'px'; tip.style.top = (sp.T + 2) + 'px'; }   // 札は、矢印の時刻と反対の側の上の隅に（指している線の峰を隠さない）
+  }
+  function dovTipIdle(el, sp) { var tip = el.querySelector('.dovt'); if (!tip) return; if (sp.nar) { tip.innerHTML = '<span class="idle">図に触ると、その時刻の値が高い順にここに出ます。</span>'; tip.classList.add('on'); } else { tip.classList.remove('on'); tip.innerHTML = ''; } }
+  function dovHide(el, sp) { var xh = el.querySelector('svg.dovs line.xh'); if (xh) xh.setAttribute('visibility', 'hidden'); sp.hj = -1; dovEm(el, sp, -1); dovTipIdle(el, sp); }
+  /** 矢印（指）の位置 → いちばん近い時刻・その時刻で近い線（16px まで・線の端の名前の上なら、その線） */
+  function dovAt(svg, sp, cx, cy) {
+    var r = svg.getBoundingClientRect(), sc = sp.W / (r.width || sp.W), x = (cx - r.left) * sc, y = (cy - r.top) * sc, js = sp.js, j1 = js[0], j2 = js[js.length - 1];
+    var j = Math.round(j1 + (x - sp.L) / (sp.W - sp.L - sp.Rm) * (j2 - j1)); j = Math.max(j1, Math.min(j2, j));
+    var hk = -1, bd = 16;
+    var onLab = sp.labs.filter(function (l) { return x >= l.lx - 4 && x <= l.lx + 40 && Math.abs(l.y - y) < 10; })[0];
+    if (onLab) hk = onLab.k;
+    else sp.py.forEach(function (yk, k) { var v = yk[j]; if (v !== undefined && Math.abs(v - y) < bd) { bd = Math.abs(v - y); hk = k; } });
+    return { j: j, k: hk };
+  }
+  var DOVM = { raf: 0, ev: null };
+  function dovMove(e) {
+    var svg = e.currentTarget; DOVM.ev = { svg: svg, x: e.clientX, y: e.clientY };
+    if (DOVM.raf) return;
+    DOVM.raf = requestAnimationFrame(function () { DOVM.raf = 0; var ev = DOVM.ev, o = ev && dovOf(ev.svg); if (!o || !o.sp || !o.sp.js) return; var a = dovAt(ev.svg, o.sp, ev.x, ev.y); dovShow(o.el, o.sp, a.j, a.k); });
+  }
+  function dovLeave(e) { var svg = e.currentTarget, o = dovOf(svg); if (!o || !o.sp) return; if (e.type === 'pointerleave' && document.activeElement === svg) return; if (e.type === 'pointerleave' && e.pointerType === 'touch') return; dovHide(o.el, o.sp); }
+  function dovFocus(e) { var o = dovOf(e.currentTarget); if (!o || !o.sp || !o.sp.js) return; var on = o.sp.hj >= 0; dovShow(o.el, o.sp, on ? o.sp.hj : o.sp.js[0], on && o.sp.hk >= 0 ? o.sp.hk : -1); }   // 指で触った直後にも選ばれる（focus）: 触って強めた線はそのまま
+  function dovClick(e) { var g = e.target.closest && e.target.closest('g.dlb'), o = dovOf(e.currentTarget); if (!g || !o) return; dovSetPin(o.el, 'k' + g.getAttribute('data-dk')); }
+  /** 強めたまま（pin）を替える: 同じ物をもう一度押すと戻す。上の札の押した印もそろえる */
+  function dovSetPin(el, p) {
+    var cur = el.getAttribute('data-pin') || '', nx = cur === p ? '' : p, sp = DOV.g[el.getAttribute('data-dov')];
+    el.setAttribute('data-pin', nx);
+    $$('.dovc [data-dovp]', el).forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-dovp') === nx)); });
+    if (sp) { if (sp.hj >= 0) dovShow(el, sp, sp.hj, -1); else dovEm(el, sp, -1); }
+  }
+  function dovKey(e) {
+    var o = dovOf(e.currentTarget); if (!o || !o.sp || !o.sp.js) return;
+    var sp = o.sp, js = sp.js, j = sp.hj >= 0 ? sp.hj : js[0], k = e.key;
+    if (k === 'ArrowLeft' || k === 'ArrowRight') { e.preventDefault(); j = Math.max(js[0], Math.min(js[js.length - 1], j + (k === 'ArrowRight' ? 1 : -1))); dovShow(o.el, sp, j, -1); }
+    else if (k === 'ArrowUp' || k === 'ArrowDown') {
+      e.preventDefault(); var pn = dovPin(o.el), ks = []; for (var q = 0; q < sp.D; q++) if (sp.py[q] && Object.keys(sp.py[q]).length) ks.push(q);
+      var i = ks.indexOf(pn.k); i = i < 0 ? (k === 'ArrowDown' ? 0 : ks.length - 1) : (i + (k === 'ArrowDown' ? 1 : -1) + ks.length) % ks.length;
+      dovSetPin(o.el, 'k' + ks[i]); if (sp.hj < 0) dovShow(o.el, sp, j, -1);
+    } else if (k === 'Escape') { if (o.el.getAttribute('data-pin')) dovSetPin(o.el, o.el.getAttribute('data-pin')); dovHide(o.el, sp); return; }
+    else return;
+    var sr = o.el.querySelector('.sr'), pn2 = dovPin(o.el), v = pn2.k >= 0 && sp.rows[pn2.k] ? sp.rows[pn2.k][sp.hj] : NaN;
+    if (sr) sr.textContent = sp.hrs[sp.hj] + '時' + (pn2.k >= 0 ? '・' + dovLong(sp.D, pn2.k) + ' ' + (isFinite(v) ? sp.fmt(v) + sp.u : '数なし') : '');
+  }
+  /** 開く・閉じる（往復 0）: 釦のすぐ下に図（エリアの左右は、左右の下に行いっぱい）。開いているかは DOVO に覚える（見る数・店・部門を替えても開いたまま） */
+  function dovToggle(b) {
+    var kind = b.getAttribute('data-dovt'), key = b.getAttribute('data-dovkey'), sk = key + '|' + kind, o = key === 'd' ? C3.d : C3R[key], op = !DOVO[sk];
+    $$('.dov', main).forEach(function (x) { if (x.getAttribute('data-dovsk') === sk) x.remove(); });
+    if (op) { DOVO[sk] = 1; var pair = b.closest('.tmpair'), h = dovPanel(o, kind, key); if (pair) pair.insertAdjacentHTML('beforeend', h); else b.insertAdjacentHTML('afterend', h); dovDrawAll(); }
+    else delete DOVO[sk];
+    b.setAttribute('aria-expanded', String(op)); b.innerHTML = dovBtnTxt(kind === 'u' ? upNm(o || {}) : (o && o.nm) || '', op);
     c3TipHide(); fhSchedule();
   }
-  function upDowBtn() { return '<button type="button" class="updow" data-updow="1" aria-expanded="false">曜日ごとに大きく見る ▸</button>'; }
+  /** 鍵の付け替え（店・部門をその場で替えたとき、開いていた図を新しい店・部門でも開いたままに） */
+  function dovRename(ren) { var nx = {}; for (var k in DOVO) nx[ren(k)] = 1; DOVO = nx; }
   /** 折れ線の題と凡例（図のすぐ上・小さな図の色の意味はその場に） */
   function upHead(o) {
     var nm = upNm(o), cn = o.cnm || '来客数';
     return '<div class="c3uh"><b>時間帯ごとの' + esc(nm) + '</b><span>（売上 ÷ ' + esc(cn) + '・円' + esc(o.per || '・1日あたりの数から') + '）</span><span><i></i>' + esc(upGNm(o.U ? o.U.length : 8, 0)) + '</span><span><i class="we"></i>' + esc(upGNm(o.U ? o.U.length : 8, 1)) + '（平均）</span>' +
       '<span><i class="av"></i>1日の' + esc(nm) + '</span><span><i class="lo"></i>薄い点＝来客が少ない時刻（期間の' + esc(cn) + 'が ' + UP_LOW + '人未満' + (o.q ? '・売上が1日 1千円未満' : '') + '・揺れやすい）</span></div>';
   }
-  /** 立体の棒（c3v）と、そのすぐ下の客単価の折れ線（c3u）。part: 'u'＝折れ線だけ・'v'＝立体だけ（見る数が「単価」のときは、折れ線を主＝上の箱に、立体を下の箱に分けて置く） */
-  function c3Body(o, part) {
-    var v = part === 'u' ? '' : '<div class="c3v">' + c3Svg(o) + '</div>', svg = part !== 'v' && o && o.C ? upSvg(o) : '', u = svg ? upHead(o) + svg + upDowBtn() : '';
+  /** 立体の棒（c3v）と、そのすぐ下の客単価の折れ線（c3u）。part: 'u'＝折れ線だけ・'v'＝立体だけ（見る数が「単価」のときは、折れ線を主＝上の箱に、立体を下の箱に分けて置く）。
+   *  s1125a: どちらの図のすぐ下にも「曜日ごとに重ねて大きく見る」（同じ部品 dov）。key＝図の箱の鍵（店の画面の図は 'd'）・pe＝図はエリアの左右の下に置く（釦だけ） */
+  function c3Body(o, part, key, pe) {
+    key = key || 'd';
+    var vs = part === 'u' ? '' : c3Svg(o), v = part === 'u' ? '' : '<div class="c3v">' + vs + '</div>' + (vs ? dovBtn(o, 'v', key, pe) : ''), svg = part !== 'v' && o && o.C ? upSvg(o) : '', u = svg ? upHead(o) + svg + dovBtn(o, 'u', key, pe) : '';
     return v + u;
   }
   function c3Cap(o) { return '<p class="c3cap">売上の立体の棒（' + esc(upNm(o || {})) + 'の元の数・横＝時刻・奥＝曜日・高さ＝売上）</p>'; }
@@ -2884,7 +3402,7 @@ var STORE_ORDER = [
       return;
     }
     if (r && r.auth) { onFail(r); return; }
-    if ((((S.view === 'home' || S.view === 'status') && !CUR) || S.view === 'dept') && (S.mo || []).indexOf(String(code)) >= 0 && (S.an !== 'tm' || (S.mo || []).some(function (k) { return String(k).indexOf(code + ':') === 0; }) || S.mdp)) { if (!redraw('blk-mcmp')) render({ keep: true }); }   // 曜日・時間帯で店の札だけを開いているときは、部門の札が地図の数なので描き直さない   // 部門ごとの「店ごとの違い」で開いた店も（s1118a）   // 本部の地図で開いている店: 店の比較の塊だけを描き直す
+    if ((((S.view === 'home' || S.view === 'status') && !CUR) || S.view === 'dept') && (S.mo || []).indexOf(String(code)) >= 0 && (S.an !== 'tm' || (S.mo || []).some(function (k) { return String(k).indexOf(code + ':') === 0; }) || S.mdp)) { if (!redraw('blk-mcmp')) render({ keep: true }); else { maiRedraw(); pbar(); } }   // 曜日・時間帯で店の札だけを開いているときは、部門の札が地図の数なので描き直さない   // 部門ごとの「店ごとの違い」で開いた店も（s1118a）   // 本部の地図で開いている店: 店の比較の塊だけを描き直す
   }
   function ensureTree() {
     if (TREE || TREE_P || !ME || !CUR) return TREE_P;
@@ -2893,7 +3411,8 @@ var STORE_ORDER = [
   }
   /** 店を選ぶ（本部が全体の地図から）。その店の木が無ければ受け取る（往復1本・待ちの印）。店の人は、スマレコの名簿の所属の1店だけ */
   function pickStore(code, dep) {
-    var path = dep ? ['S', dep] : ['S'];
+    var path = dep ? ['S', dep] : ['S'], T = treeOf(code);
+    if (dep && T && T.N[dep] && T.N[dep].lv > 1) { path = []; for (var x = dep, g = 0; x && T.N[x] && g++ < 8; x = T.N[x].p) if (T.N[x].lv !== 3) path.unshift(x); }   // s1125a: 中分類・クラスから開くときは、その段まで（AI のコメントの次の一手）
     if (code === CUR && S.view === 'status' && S.path.join() === path.join()) return;
     pushHist();
     useStore(code); S.view = 'status'; S.path = path; S.open = [];
@@ -2980,6 +3499,7 @@ var STORE_ORDER = [
   function bind() {
     document.addEventListener('click', function (e) {
       if (!e.target.closest('#acct')) $('#acctmenu').classList.remove('on');
+      if (CP.el && !e.target.closest('#cpop') && !e.target.closest('[data-cdd]')) crumbClose();
       if (narrowNav() && $('#side').classList.contains('on') && !e.target.closest('#side') && !e.target.closest('#menubtn')) sideOpen(false);
       if (!e.target.closest('.res') && !e.target.closest('input')) $$('.res').forEach(function (x) { x.classList.remove('on'); });
       if (e.target === $('#dlg')) { closeDlg(); return; }
@@ -3016,7 +3536,6 @@ var STORE_ORDER = [
       if (ds.mdp != null) { try { localStorage.setItem('storeops_mdp_v1', ds.mdp); } catch (e2) {} if (ds.mdp !== S.mdp) go({ mdp: ds.mdp }, { keep: true }); return; }   // 本部の地図の見る範囲（全社／部門）
       if (ds.mar != null) { try { localStorage.setItem('storeops_mar_v1', ds.mar); } catch (e3) {} if (ds.mar !== S.mar) go({ mar: ds.mar }, { keep: true }); return; }   // 本部の地図の見る範囲（全社／エリア・s1118a）
       if (ds.mts != null) { if (+ds.mts !== S.mts) go({ mts: +ds.mts }, { keep: true, part: 'blk-mcmp' }); return; }   // 店の比較の小さな立体の目盛り（どの店も同じ／店ごと）: 店の比較の塊だけ
-      if (ds.crumb != null) { go({ view: 'status', path: S.path.slice(0, +ds.crumb + 1) }, { land: true }); return; }
       if (ds.anhome) { go({ view: 'status', path: ['S'], an: ds.anhome }, { top: true }); return; }   // 天気と売れ方 → 自店のステータスをその分析で
       if (ds.wxstore) { pushHist(); useStore(ds.wxstore); S.view = 'status'; S.path = ['S']; S.open = []; S.an = 'wx'; render({ top: true }); ensureTree(); return; }   // 本部: 店ごとの雨の効き → その店を雨の日の効きで
       if (ds.an) { go({ an: ds.an }, { keep: true }); return; }
@@ -3027,10 +3546,14 @@ var STORE_ORDER = [
       if (ds.wm != null) { go({ wm: +ds.wm }, { keep: true, part: S.view === 'wx' && W32 ? 'blk-w32' : '' }); return; }   // 同: 売上／来客数
       if (ds.w32retry) { W32_ERR = ''; w32Load(); render({ keep: true }); return; }
       if (ds.yev) { var yo = (S.yo || []).slice(), yi = yo.indexOf(ds.yev); if (yi >= 0) yo.splice(yi, 1); else yo.push(ds.yev); go({ yo: yo }, { keep: true, part: 'blk-year' }); return; }   // 年間の流れの行: すぐ下に開く（往復 0）
-      if (ds.mtog) { var mk = ds.mtog, mo = S.mo || []; if (mo.indexOf(mk) >= 0) mo = moClose(mo, mk); else { mo = mo.concat([mk]); var dd0 = DATA[mk.split(':')[0]]; if (dd0 && dd0.err) dd0.err = ''; } if (b.classList.contains('tmt') && tmFast(b, mk, mo)) return; go({ mo: mo }, { keep: true, part: mk.indexOf('A:') === 0 ? '' : 'blk-mcmp' }); return; }   // 本部の地図の店の比較: 店 → 部門 → 中分類 → クラスを、すぐ下に（店の比較の塊だけを描き直す）
+      if (ds.mtog) { var mk = ds.mtog, mo = S.mo || []; if (mo.indexOf(mk) >= 0) mo = moClose(mo, mk); else { mo = mo.concat([mk]); var dd0 = DATA[mk.split(':')[0]]; if (dd0 && dd0.err) dd0.err = ''; } if (b.classList.contains('tmt') && tmFast(b, mk, mo)) return; go({ mo: mo }, { keep: true, part: mk.indexOf('A:') === 0 ? '' : 'blk-mcmp', parts: ['blk-mai'] }); return; }   // 本部の地図の店の比較: 店 → 部門 → 中分類 → クラスを、すぐ下に（店の比較の塊だけを描き直す）
       if (ds.mmo) { var mm = S.mmo || []; go({ mmo: mm.indexOf(ds.mmo) >= 0 ? treeClose(mm, ds.mmo) : mm.concat([ds.mmo]) }, { keep: true, part: 'blk-mdig' }); return; }   // 今月の型の掘り下げ
       if (ds.eo) { var eo = S.eo || [], ek = ds.eo, pre = (ek.indexOf('D|') === 0 ? ek.slice(2) : ek) + '|'; go({ eo: eo.indexOf(ek) >= 0 ? eo.filter(function (k) { return k !== ek && k.indexOf(pre) !== 0; }) : eo.concat([ek]) }, { keep: true, part: { event: 'blk-edig', year: 'blk-year', dept: 'blk-dyear' }[S.view] || '' }); return; }   // 催事の掘り下げ（閉じるときは、その中で開いていた行も閉じる）
-      if (ds.updow) { upDowToggle(b); return; }   // 客単価の折れ線: 曜日ごとの小さな図を、すぐ下に開く・閉じる（往復 0・図だけ）
+      if (ds.cgo != null) { crumbClose(); crumbGo(ds.cgo); return; }   // s1125a: いま見ている所の帯の名前 → その段へ
+      if (ds.cdd != null) { crumbOpen(+ds.cdd, b); return; }   // 同: ▾ → 同じ段のほかの店・部門の一覧
+      if (ds.cpick != null) { crumbPick(ds.cpick); return; }   // 同: 一覧から選んだ → その場で替える
+      if (ds.dovt) { dovToggle(b); return; }   // s1125a: 曜日ごとに重ねた大きな図を、すぐ下に開く・閉じる（往復 0・図だけ）
+      if (ds.dovp) { var dve = b.closest('.dov'); if (dve) dovSetPin(dve, ds.dovp); return; }   // 同: 線・まとまりを強めたまま（もう一度押すと戻す）
       if (ds.c3rot != null) { var dr = +ds.c3rot; C3.yaw = dr ? Math.max(-80, Math.min(80, C3.yaw + dr)) : C3.YAW0; c3Redraw(); return; }   // 立体の棒を回す（図だけ描き直す・往復 0）
       if (ds.dsel) { if ((S.path.length > 1 ? S.path[1] : 'S') !== ds.dsel || S.path.length > 2) go({ view: 'status', path: ds.dsel === 'S' ? ['S'] : ['S', ds.dsel] }, { keep: true }); return; }   // 見る範囲（部門）: 分析の見方はそのまま、範囲だけ替える
       if (ds.drill) { drillTo(ds.drill); return; }
@@ -3038,7 +3561,12 @@ var STORE_ORDER = [
     document.addEventListener('keydown', function (e) {
       var t = e.target;
       if ((e.key === 'Enter' || e.key === ' ') && t.getAttribute && (t.getAttribute('role') === 'button' || (t.getAttribute('role') === 'link' && t.closest('.guide2')))) { e.preventDefault(); t.dispatchEvent(new MouseEvent('click', { bubbles: true })); return; }   // 図の中の催事（svg）にも効く
-      if (e.key === 'Escape') { $('#acctmenu').classList.remove('on'); if (narrowNav()) sideOpen(false); closeDlg(); $$('.res').forEach(function (x) { x.classList.remove('on'); }); return; }
+      if (CP.el && t.closest && t.closest('#cpop')) {   // 店・部門の一覧: ↑ ↓ で選ぶ・Enter で決める（釦）・Esc で閉じる（▾ に戻る）
+        if (e.key === 'Escape') { e.preventDefault(); crumbClose(true); return; }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); var ops = $$('[data-cpick]', CP.el).filter(function (x) { return !x.hidden && !x.disabled; }), ci = ops.indexOf(t), ni = ci < 0 ? (e.key === 'ArrowDown' ? 0 : ops.length - 1) : Math.max(0, Math.min(ops.length - 1, ci + (e.key === 'ArrowDown' ? 1 : -1))); if (ops[ni]) ops[ni].focus(); return; }
+        if (e.key === 'Enter' && t.id === 'cpq') { e.preventDefault(); var f1 = $$('[data-cpick]', CP.el).filter(function (x) { return !x.hidden && !x.disabled; })[0]; if (f1) crumbPick(f1.getAttribute('data-cpick')); return; }
+      }
+      if (e.key === 'Escape') { crumbClose(); $('#acctmenu').classList.remove('on'); if (narrowNav()) sideOpen(false); closeDlg(); $$('.res').forEach(function (x) { x.classList.remove('on'); }); return; }
       if (t.id === 'q1') {
         var box = $('#r1'), items = $$('button[data-hit]', box), cur = items.findIndex(function (x) { return x.classList.contains('act'); });
         if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (!items.length) return; var nx = e.key === 'ArrowDown' ? Math.min(items.length - 1, cur + 1) : Math.max(0, cur - 1); items.forEach(function (x, i) { x.classList.toggle('act', i === nx); }); items[nx].scrollIntoView({ block: 'nearest' }); }
@@ -3049,7 +3577,7 @@ var STORE_ORDER = [
     var glCancel = function (ev) { if (ev && ev.type === 'pointerdown' && ev.target.closest && ev.target.closest('#side')) return; SPY.pin = ''; if (glStop) { glStop(); glStop = null; cancelAnimationFrame(gl); clearTimeout(glT); } };
     ['wheel', 'touchstart', 'pointerdown', 'keydown'].forEach(function (ev) { window.addEventListener(ev, glCancel, { passive: true, capture: true }); });
     var c3drag = null;   // 立体の棒: 左右に引いて回す（指でも・マウスでも）
-    document.addEventListener('pointerdown', function (e) { var s = e.target.closest && e.target.closest('.c3s'); if (!s || e.target.closest('.c3u,.updg,button') || e.pointerType === 'touch' || e.button) return; /* 指は横に送る（はみ出した図を動かす）・回すのはボタンで */ c3drag = { x: e.clientX, y0: C3.yaw, raf: 0 }; s.classList.add('drag'); });
+    document.addEventListener('pointerdown', function (e) { var s = e.target.closest && e.target.closest('.c3s'); if (!s || e.target.closest('.c3u,.dov,button') || e.pointerType === 'touch' || e.button) return; /* 指は横に送る（はみ出した図を動かす）・回すのはボタンで */ c3drag = { x: e.clientX, y0: C3.yaw, raf: 0 }; s.classList.add('drag'); });
     document.addEventListener('pointermove', function (e) {
       if (!c3drag) return; var ny = Math.max(-80, Math.min(80, c3drag.y0 + (e.clientX - c3drag.x) * 0.35));
       if (Math.abs(ny - C3.yaw) < 0.5) return; C3.yaw = ny;
@@ -3064,7 +3592,7 @@ var STORE_ORDER = [
     document.addEventListener('pointerdown', function (e) { if (e.pointerType !== 'touch') return; var uu = e.target.closest && e.target.closest('svg.c3u'), g = uu ? upNear(uu, e.clientX, e.clientY) : e.target.closest && e.target.closest('.c3s g[data-k],svg.lsl g[data-lt]'); if (g) c3TipShow(g, e.clientX, e.clientY); else c3TipHide(); }, { passive: true });
     window.addEventListener('scroll', function () { if (C3TIP.g) c3TipHide(); }, { passive: true });
     document.addEventListener('pointerup', c3up); document.addEventListener('pointercancel', c3up);
-    document.addEventListener('input', function (e) { var t = e.target; if (t.id !== 'q1') return; clearTimeout(stimer); stimer = setTimeout(function () { search(t, $('#r1')); }, 120); });
+    document.addEventListener('input', function (e) { var t = e.target; if (t.id === 'cpq') { crumbFind(t.value); return; } if (t.id !== 'q1') return; clearTimeout(stimer); stimer = setTimeout(function () { search(t, $('#r1')); }, 120); });
     window.addEventListener('scroll', function () { fhSchedule(); sideSpySoon(); }, { passive: true });
     // 探す欄（上の帯）: 空のまま押すと、困りごとの言葉の例
     document.addEventListener('focusin', function (e) { if (e.target && e.target.id === 'q1' && !e.target.value.trim()) { var r1 = $('#r1'); r1.innerHTML = qExamples(); r1.classList.add('on'); } });
@@ -3078,7 +3606,7 @@ var STORE_ORDER = [
       g.addEventListener('pointerup', function () { if (!drag) return; drag = null; try { localStorage.setItem('storeops_side_w_v1', String(parseInt(getComputedStyle(document.documentElement).getPropertyValue('--side'), 10))); } catch (e) { /* 覚えられなくても今は使える */ } fhSchedule(); });
     })();
     document.addEventListener('scroll', function (e) { if (e.target && e.target.classList && e.target.classList.contains('tw')) fhSchedule(); }, true);
-    window.addEventListener('resize', function () { document.documentElement.style.setProperty('--hdr', $('#hdr').offsetHeight + 'px'); fhSchedule(); if (!narrowNav()) sideOpen(false); var nar = window.innerWidth < 760; if (nar !== C3.nar) { C3.nar = nar; c3Redraw(); } });
+    window.addEventListener('resize', function () { document.documentElement.style.setProperty('--hdr', $('#hdr').offsetHeight + 'px'); fhSchedule(); DOVWC = {}; if (!DOVM.rs) DOVM.rs = requestAnimationFrame(function () { DOVM.rs = 0; dovDrawAll(); }); crumbClose(); if (!narrowNav()) sideOpen(false); var nar = window.innerWidth < 760; if (nar !== C3.nar) { C3.nar = nar; c3Redraw(); } });
     document.addEventListener('toggle', function (e) { var d = e.target; if (d && d.matches && d.matches('details[data-lazy]') && d.open) fillLazy(d); if (d && d.matches && d.matches('details[data-lzf]') && d.open) fillLzf(d); fhSchedule(); }, true);
     window.addEventListener('beforeprint', function () { $$('details[data-lzf]').forEach(fillLzf); });
   }
@@ -3131,6 +3659,6 @@ var STORE_ORDER = [
     bind();
     AUTH.start(onReady, { gate: showGate, busy: showBusy });
   });
-  window.STATUS_APP = { go: go, back: back, fromBack: fromBack, from: function () { var f = S.from && FROMS[S.from]; return f ? f.nm : ''; }, place: placeName, guide: { open: openGuide, ready: function () { return !!GD.html; }, go: gdGo, here: function () { return GD.here; }, prof: function () { var t0 = performance.now(); GD.cache = ''; var c = gdPrepared(), t1 = performance.now(); return { prep: t1 - t0, bytes: c.length }; } }, histLen: function () { return HIST.length; }, drillTo: drillTo, state: S, fhUpdate: fhUpdate, openSec: function (id) { openSec(id); }, tree: function () { return TREE; }, w32: function () { return W32; }, me: function () { return ME; }, kept: function () { return Object.keys(DATA).filter(function (c) { return DATA[c] && DATA[c].tree; }).length; }, dict: function () { return DICT; }, busy: function () { return !!(TREE_P || W32_P) || PEND > 0; }, gliding: function () { return !!glStop; },   // busy＝店の木・3-2 の数を裏で受け取っている最中（試験が、届いた後の描き直しと押すのが重ならないように待つ）
+  window.STATUS_APP = { anc: function () { return ANC; }, crumb: function () { return CRM ? CRM.segs.filter(function (x) { return !x.act; }).map(function (x) { return x.nm; }) : []; }, dovOpen: function () { return Object.keys(DOVO); }, go: go, back: back, fromBack: fromBack, from: function () { var f = S.from && FROMS[S.from]; return f ? f.nm : ''; }, place: placeName, guide: { open: openGuide, ready: function () { return !!GD.html; }, go: gdGo, here: function () { return GD.here; }, prof: function () { var t0 = performance.now(); GD.cache = ''; var c = gdPrepared(), t1 = performance.now(); return { prep: t1 - t0, bytes: c.length }; } }, histLen: function () { return HIST.length; }, drillTo: drillTo, state: S, fhUpdate: fhUpdate, openSec: function (id) { openSec(id); }, tree: function () { return TREE; }, w32: function () { return W32; }, me: function () { return ME; }, kept: function () { return Object.keys(DATA).filter(function (c) { return DATA[c] && DATA[c].tree; }).length; }, dict: function () { return DICT; }, busy: function () { return !!(TREE_P || W32_P) || PEND > 0; }, gliding: function () { return !!glStop; },   // busy＝店の木・3-2 の数を裏で受け取っている最中（試験が、届いた後の描き直しと押すのが重ならないように待つ）
     find: function (q) { var i = $('#q1'); i.value = q; search(i, $('#r1')); return $$('#r1 button[data-hit]').map(function (b) { return b.textContent; }); } };
 })();
