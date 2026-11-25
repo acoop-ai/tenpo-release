@@ -1194,7 +1194,7 @@ var STORE_ORDER = [
   function tmShape(H, D) {
     var tr = H.map(function (r) { return r.reduce(function (a, v) { return a + (isFinite(v) ? v : 0); }, 0); }), mx = Math.max.apply(null, tr.concat([0])), RL = D === 3 ? RL3 : DOW8, WE = c3We(D);
     if (!(mx > 0)) return '<span class="shp none">数なし</span>';
-    return '<span class="shp" role="img" aria-label="曜日の形（1日の計の大きさ）">' + tr.map(function (v, k) { return '<span class="sc' + (WE(k) ? ' we' : '') + '" title="' + esc(RL[k] + ' 1日の計 ' + num(v, 1)) + '"><i style="height:' + Math.max(2, Math.round(v / mx * 30)) + 'px"></i><small>' + RL[k] + '</small></span>'; }).join('') + '</span>';
+    return '<span class="shp" role="img" aria-label="曜日の形（1日の計の大きさ）">' + tr.map(function (v, k) { return '<span class="sc' + (WE(k) ? ' we' : '') + '" title="' + esc(RL[k] + ' 1日の計 ' + num(v, 1)) + '"><i style="height:' + Math.max(2, Math.round(v / mx * 30)) + 'px;background:' + c3Col(D, k).t + '"></i><small>' + RL[k] + '</small></span>'; }).join('') + '</span>';
   }
   /** 1つの札（店・部門・中分類・クラス）と、開いていればその札の行のすぐ下に開く中（大きな立体と、下の段の札）。
    *  nd: { key, nm, tag, H, Q, D, kids〈関数・{grps:[{g,list}], wait}〉, cmp〈ひとこと〉, nc } ／ ctx: { k, hrs, max〈小さな立体の物差し〉, lv } */
@@ -1974,7 +1974,7 @@ var STORE_ORDER = [
         var grp = {}, keys = [], add = function (key, fill, st, d) { if (!grp[key]) { grp[key] = { d: '', fill: fill, st: st || '' }; keys.push(key); } grp[key].d += d; };
         bars.forEach(function (bb) {
           if (bb.k !== kk) return;
-          var C = C3C[WE(bb.k) ? 'we' : 'wd'], x0 = bb.gx - wx, x1 = bb.gx + wx, y0 = bb.gy - wy, y1 = bb.gy + wy, z = bb.z, zx = bb.zx, full = zx >= z - 1e-6, hx = zx > 0.004, hr = z - zx > 0.004;
+          var C = c3Col(D, bb.k), x0 = bb.gx - wx, x1 = bb.gx + wx, y0 = bb.gy - wy, y1 = bb.gy + wy, z = bb.z, zx = bb.zx, full = zx >= z - 1e-6, hx = zx > 0.004, hr = z - zx > 0.004;
           // 角の点は1回だけ画面の座標にする（s1124b: うち値引きの面と境の線で点が増え、26 店の札で CPU 4倍 +0.2 秒だった。面どうしで同じ角を使い回す）
           var q = function (x, y, zz) { return T(P(x, y, zz)).join(','); }, b0 = q(x0, y0, zx), b1 = q(x1, y0, zx), c0 = q(x0, y0, z), c1 = q(x1, y0, z);
           if (hx) add('fx', C3C.x.f, '', 'M' + q(x0, y0, 0) + 'L' + q(x1, y0, 0) + 'L' + b1 + 'L' + b0 + 'Z');   // 下から: うち値引き（桃）
@@ -1987,7 +1987,7 @@ var STORE_ORDER = [
       });
     } else bars.forEach(function (bb) {
       // s1124b: 色は 平日＝青・土日と祝日＝橙・うち値引き＝桃（棒の下から・境に白い線）。高さだけで多さを表す（前の「色の濃さ＝高さ」は外した＝値引きの色を「多い」と読ませない）
-      var x0 = bb.gx - wx, x1 = bb.gx + wx, y0 = bb.gy - wy, y1 = bb.gy + wy, z = bb.z, zx = bb.zx, C = C3C[WE(bb.k) ? 'we' : 'wd'], CX = C3C.x, full = zx >= z - 1e-6;
+      var x0 = bb.gx - wx, x1 = bb.gx + wx, y0 = bb.gy - wy, y1 = bb.gy + wy, z = bb.z, zx = bb.zx, C = c3Col(D, bb.k), CX = C3C.x, full = zx >= z - 1e-6;
       // 角の点（横 x0／x1 × 奥 y0／y1 × 高さ 0／うち値引きの境／上）は1回だけ画面の座標にして、面どうしで使い回す（s1124b: うち値引きの面で点が倍になったため）
       var cc = [], q = function (xi, yi, zi) { var k = xi * 6 + yi * 3 + zi; return cc[k] || (cc[k] = T(P(xi ? x1 : x0, yi ? y1 : y0, zi === 0 ? 0 : zi === 1 ? zx : z)).join(',')); };
       var pg = function (ks, fill, st) { return '<polygon points="' + ks.join(' ') + '" fill="' + fill + '"' + (st || ' stroke="rgba(15,23,42,.22)" stroke-width="0.6"') + '/>'; };
@@ -2013,9 +2013,22 @@ var STORE_ORDER = [
   /** 立体の棒の色（s1124b）: 平日＝青・土日と祝日＝橙・うち値引き＝桃（ロスの色の「値引き」#D1609B・棒の下から）。f＝前の面・s＝横の面・t＝上の面。
    *  色の弱い人の見え方でも3つが分かれる（OKLab の差 最小 8.5〈1型・Machado 2009〉・背景との明るさの比 3:1 以上を道具で確かめた）。色だけに頼らない＝棒の下の位置・境の白い線・凡例と札の名前の字。
    *  前の「色の濃さ＝高さ」はやめた（値引きの色を「多い」と読ませないため・多さは高さだけで表す） */
+  /** 曜日の色（s1126a・1か所）: PO 11/25「月～金、土日祝の色の移り変わりが少なすぎるので、それぞれの系統色でもう少し幅広く虹色とは言わないけど、黄緑～青　黄色～オレンジ　位の間でうまく色分け」。
+   *  並び＝月 火 水 木 金 土 日 祝。h＝色相・s＝鮮やかさ（平日＝黄緑 82 → 緑 128 → 青緑 172 → 空色 200 → 青 222・土日祝＝黄 46 → 山吹 33 → 橙 22）。
+   *  ln＝線（白い地で 3:1 以上）・dk＝強めた線（6:1 以上）・立体の棒は同じ色相で 前の面 50%・横 38%・上 68% の明るさ。r3＝3行の形（平日・土・日祝）に使う色の番号。
+   *  色だけで見分けさせない（線の端の名前・祝日は点線・立体は行の名前・札の字）。値引きの桃（棒の下）と重ならない色相 */
+  var DOWC = {
+    h: [82, 128, 172, 200, 222, 46, 33, 22], s: [62, 52, 70, 72, 62, 92, 92, 85],
+    ln: ['#6e9924', '#329f41', '#1c9c8b', '#2295ce', '#3a67cf', '#ab8507', '#ce7509', '#e35d14'],
+    dk: ['#4d6b19', '#23702e', '#136c60', '#186891', '#23439a', '#7a5f05', '#8e5106', '#a5450d'],
+    r3: [3, 5, 6]
+  };
+  DOWC.bar = DOWC.h.map(function (h, i) { var s = Math.round(DOWC.s[i] * 0.95); return { f: 'hsla(' + h + ',' + s + '%,50%,0.88)', s: 'hsla(' + h + ',' + s + '%,38%,0.88)', t: 'hsla(' + h + ',' + s + '%,68%,0.97)', sw: DOWC.ln[i] }; });
+  /** 立体の棒の色: 行（曜日）ごとに DOWC の色。D＝行の数（8＝月〜祝・3＝平日・土・日祝） */
+  function c3Col(D, k) { return DOWC.bar[D === 3 ? DOWC.r3[k] : k] || DOWC.bar[0]; }
+  /** 凡例の色見本: 平日（月→金）・土日祝（土→祝）を、色の移り変わりのまま1つの見本に */
+  function dowGrad(we) { var a = we ? DOWC.ln.slice(5) : DOWC.ln.slice(0, 5); return 'linear-gradient(90deg,' + a.join(',') + ')'; }
   var C3C = {
-    wd: { f: 'hsla(214,62%,52%,0.88)', s: 'hsla(214,62%,40%,0.88)', t: 'hsla(214,62%,68%,0.97)', sw: '#397ad0' },
-    we: { f: 'hsla(26,78%,48%,0.88)', s: 'hsla(26,78%,37%,0.88)', t: 'hsla(26,78%,64%,0.97)', sw: '#da6e1b' },
     x: { f: LOSS_COL['値引き'], s: '#a8437a', t: '#e690bf', sw: LOSS_COL['値引き'] }   // 前の面＝ロスの色の「値引き」（桃）そのもの・横は暗く・上は明るく
   };
   /** うち値引きの名前（見る数ごと）: 売上＝値引きで売れた金額・販売数＝値引きで売れた点数・来客数＝値引きの品を買った人（部門より下は、その分類の値引きの品を買った人） */
@@ -2031,7 +2044,7 @@ var STORE_ORDER = [
   function c3Legend(o, sc) {
     o = o || C3.d;
     var sw = function (c) { return '<i style="background:' + c + '"></i>'; };
-    return '<div class="c3lg"><span>棒の高さ＝' + esc((o && o.nm) || '売上') + (sc ? '（' + esc(sc) + '）' : '') + '</span><span class="sw">' + sw(C3C.wd.sw) + '平日</span><span class="sw">' + sw(C3C.we.sw) + '土日・祝</span>' +
+    return '<div class="c3lg"><span>棒の高さ＝' + esc((o && o.nm) || '売上') + (sc ? '（' + esc(sc) + '）' : '') + '</span><span class="sw">' + sw(dowGrad(0)) + '平日（月→金）</span><span class="sw">' + sw(dowGrad(1)) + '土日・祝（土→祝）</span>' +
       (o && o.X ? '<span class="sw x">' + sw(C3C.x.sw) + '<b>棒の下の桃色＝うち' + esc(o.xnm || '値引き') + '</b></span>' : '') + '<span><i class="pk"></i>濃い縁＝その曜日の峰</span><span><i class="hf"></i>菱形＝折り返し（ここで1日の半分）</span></div>';
   }
   /** 立体の元に、うち値引きを付ける（s1124b）。k＝見る数（a・q・c）・単価（u）のときは付けない（率は積まない＝PO 11/24）。get(鍵)＝行列（無ければ null）。
@@ -2228,9 +2241,12 @@ var STORE_ORDER = [
   //   線の右の端に名前（色だけで見分けさせない）。時刻に矢印を合わせる（スマホは触る）と、その時刻の値を高い順に並べた札・線に近ければ、その線を濃く太く（ほかは薄く）。
   //   名前の札（上）・線の端の名前を押すと、その線（平日・土日祝のまとまり）を強めたまま。キーボードは図を選んで ← → で時刻・↑ ↓ で曜日・Esc で戻す。数は「表で見る」にも（札だけにしない）。描き直しは図だけ（往復 0）
   var DOV = { n: 0, g: {} }, DOVO = {};   // g＝描いた図の形（番号 → 形）・DOVO＝開いている図（鍵 → 1）。鍵＝図の箱の鍵（data-c3・店の画面の図は 'd'）＋'|'＋種類（v＝立体の数・u＝客単価）
-  // 線の色（白い地で 3:1 以上）: 平日＝青の仲間（月→金で少しずつ濃く）・土日祝＝橙の仲間。強めた線は同じ仲間の濃い色・太く
-  var DOVC = { wd: ['#5b8bd0', '#5284c9', '#4a7dc2', '#4276bb', '#3a6fb4'], we: ['#d87a35', '#c46a2a', '#cc6d24'], wdD: '#163f7d', weD: '#8a3f05' };
-  function dovCol(D, k) { return D === 3 ? (k ? DOVC.we[k - 1] : DOVC.wd[2]) : k >= 5 ? DOVC.we[k - 5] : DOVC.wd[k]; }
+  // 線の色（白い地で 3:1 以上）: 平日＝黄緑 → 青（月→金）・土日祝＝黄 → 橙（土→日→祝）。強めた線は、その線と同じ色の濃い色（6:1 以上）・太く
+  //   s1126a（PO 11/25「月～金、土日祝の色の移り変わりが少なすぎるので、それぞれの系統色でもう少し幅広く…黄緑～青　黄色～オレンジ　位の間で」）。色は DOWC（立体の棒と同じ1か所）
+  var DOVC = { wd: DOWC.ln.slice(0, 5), we: DOWC.ln.slice(5), wdD: DOWC.dk.slice(0, 5), weD: DOWC.dk.slice(5) };
+  function dovIdx(D, k) { return D === 3 ? DOWC.r3[k] : k; }   // 3行の形（平日・土・日祝）は 木・土・日 の色
+  function dovCol(D, k) { return DOWC.ln[dovIdx(D, k)]; }
+  function dovColD(D, k) { return DOWC.dk[dovIdx(D, k)]; }
   function dovShort(D, k) { return D === 3 ? RL3[k] : DOW8[k]; }   // 線の端の名前（月・火…祝／平日・土・日祝）
   function dovLong(D, k) { return D === 3 ? RN3[k] : dayNm(k); }
   function dovHoli(D, k) { return D !== 3 && k === 7; }   // 祝日の線は点線（同じ橙の仲間の中で、形でも分ける）
@@ -2270,7 +2286,7 @@ var STORE_ORDER = [
     var chip = function (k2) { return '<button type="button" data-dovp="k' + k2 + '" aria-pressed="false" title="' + esc(dovLong(D, k2) + 'の線を強めたままにします（もう一度押すと戻す）') + '"><i' + (dovHoli(D, k2) ? ' class="ds"' : '') + ' style="--c:' + dovCol(D, k2) + '"></i>' + esc(dovShort(D, k2)) + '</button>'; };
     var title = (sp.who ? sp.who + '｜' : '') + '曜日ごとの' + sp.nm, sub = '（' + sp.u + '・' + sp.per + '・' + D + '本の線を同じ目盛りに重ねた図）';
     return '<div class="dov" data-dov="' + id + '" data-dovsk="' + esc(sk) + '"><div class="dovh"><b>' + esc(title) + '</b><span>' + esc(sub) + '</span></div>' + dovLead(sp) +
-      '<div class="dovc" role="group" aria-label="強める線"><span class="gl">強める線</span><button type="button" data-dovp="g0" aria-pressed="false"><i style="--c:' + DOVC.wd[2] + '"></i>' + (D === 3 ? '平日' : '平日（月〜金）') + '</button><button type="button" data-dovp="g1" aria-pressed="false"><i style="--c:' + DOVC.we[0] + '"></i>' + (D === 3 ? '土・日祝' : '土日祝') + '</button><span class="gl">｜</span>' + ks.map(chip).join('') +
+      '<div class="dovc" role="group" aria-label="強める線"><span class="gl">強める線</span><button type="button" data-dovp="g0" aria-pressed="false"><i class="gr" style="--g:' + dowGrad(0) + '"></i>' + (D === 3 ? '平日' : '平日（月〜金）') + '</button><button type="button" data-dovp="g1" aria-pressed="false"><i class="gr" style="--g:' + dowGrad(1) + '"></i>' + (D === 3 ? '土・日祝' : '土日祝') + '</button><span class="gl">｜</span>' + ks.map(chip).join('') +
       '<span class="rf"><i class="ds" style="--c:#334155"></i>点線＝' + esc(sp.ref.nm) + '</span>' + (sp.lo ? '<span class="rf"><i class="lo"></i>白い点＝来客が少ない時刻（揺れやすい）</span>' : '') + '</div>' +
       '<p class="hint dovhint">線か時刻にマウスを置く（スマホは図に触る）と、その時刻の値が高い順に出て、近い線が濃く太くなります。上の札か線の端の名前を押すと、その線を強めたままにします（もう一度押すと戻す）。キーボードは図を選んで ← → で時刻・↑ ↓ で曜日・Esc で戻す。' + '</p>' +
       '<div class="dovw"><svg class="dovs" tabindex="0" role="img" aria-label="' + esc(title + '（' + D + '本の折れ線を重ねた図・数は下の「表で見る」にもあります）') + '"></svg><div class="dovt" aria-hidden="true"></div><span class="sr" aria-live="polite"></span></div>' +
@@ -2327,7 +2343,7 @@ var STORE_ORDER = [
       }
       flush();
       for (j = j1; j <= j2; j++) if (yk[j] !== undefined) pts += '<circle' + (LO && LO[j] ? ' class="lo"' : '') + ' cx="' + f1(X(j)) + '" cy="' + f1(yk[j]) + '" r="3"/>';
-      gl += '<g class="dl' + (dovHoli(D, k) ? ' ho' : '') + '" data-dk="' + k + '" style="--c:' + dovCol(D, k) + ';--cd:' + (WE(k) ? DOVC.weD : DOVC.wdD) + '">' + seg + pts + '</g>';
+      gl += '<g class="dl' + (dovHoli(D, k) ? ' ho' : '') + '" data-dk="' + k + '" style="--c:' + dovCol(D, k) + ';--cd:' + dovColD(D, k) + '">' + seg + pts + '</g>';
       py.push(yk);
     }
     // 線の名前（s1125a の検査「名前が 21時の1点に積まれ、どの線か位置で分からない」）: 名前はいつも右の余白に縦に並べる（図の中に字を置かない）。
@@ -2346,7 +2362,7 @@ var STORE_ORDER = [
       if (labs.length) { labs[labs.length - 1].y = Math.min(labs[labs.length - 1].y, H - B + 4); for (i = labs.length - 2; i >= 0; i--) labs[i].y = Math.min(labs[i].y, labs[i + 1].y - 17); }
     } else labs.forEach(function (l, i2) { l.y = T + 12 + i2 * 17; });
     var lx = W - Rm + 8; labs.forEach(function (l) { l.lx = lx; });
-    if (!atEnd) s += '<text class="lbh" x="' + (W - 2) + '" y="' + f1(T - 4) + '" text-anchor="end">' + esc(sp.hrs[aj]) + '時の高い順</text>';    var lb = labs.map(function (l) { return '<g class="dlb' + (dovHoli(D, l.k) ? ' ho' : '') + '" data-dk="' + l.k + '" style="--c:' + dovCol(D, l.k) + ';--cd:' + (WE(l.k) ? DOVC.weD : DOVC.wdD) + '">' + (l.at ? '<line class="ld" x1="' + f1(l.x + 4) + '" y1="' + f1(l.y0) + '" x2="' + f1(lx - 1) + '" y2="' + f1(l.y) + '"/>' : '') + '<line class="sw" x1="' + f1(lx) + '" x2="' + f1(lx + 12) + '" y1="' + f1(l.y) + '" y2="' + f1(l.y) + '"/><rect x="' + f1(lx - 3) + '" y="' + f1(l.y - 9) + '" width="42" height="18" fill="transparent"/><text x="' + f1(lx + 15) + '" y="' + f1(l.y + 4.5) + '">' + esc(dovShort(D, l.k)) + '</text></g>'; }).join('');   // 線の端の名前（短い線の見本つき＝凡例と同じ形・押すと強めたまま）
+    if (!atEnd) s += '<text class="lbh" x="' + (W - 2) + '" y="' + f1(T - 4) + '" text-anchor="end">' + esc(sp.hrs[aj]) + '時の高い順</text>';    var lb = labs.map(function (l) { return '<g class="dlb' + (dovHoli(D, l.k) ? ' ho' : '') + '" data-dk="' + l.k + '" style="--c:' + dovCol(D, l.k) + ';--cd:' + dovColD(D, l.k) + '">' + (l.at ? '<line class="ld" x1="' + f1(l.x + 4) + '" y1="' + f1(l.y0) + '" x2="' + f1(lx - 1) + '" y2="' + f1(l.y) + '"/>' : '') + '<line class="sw" x1="' + f1(lx) + '" x2="' + f1(lx + 12) + '" y1="' + f1(l.y) + '" y2="' + f1(l.y) + '"/><rect x="' + f1(lx - 3) + '" y="' + f1(l.y - 9) + '" width="42" height="18" fill="transparent"/><text x="' + f1(lx + 15) + '" y="' + f1(l.y + 4.5) + '">' + esc(dovShort(D, l.k)) + '</text></g>'; }).join('');   // 線の端の名前（短い線の見本つき＝凡例と同じ形・押すと強めたまま）
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H); svg.setAttribute('width', W); svg.setAttribute('height', H);
     svg.innerHTML = s + gl + lb + '<line class="xh" x1="0" x2="0" y1="' + T + '" y2="' + (H - B) + '" visibility="hidden"/>';
     sp.W = W; sp.H = H; sp.X = X; sp.js = js; sp.py = py; sp.L = L; sp.Rm = Rm; sp.T = T; sp.B = B; sp.nar = nar; sp.labs = labs; sp.hj = -1; sp.aj = aj;
@@ -3651,6 +3667,48 @@ var STORE_ORDER = [
     return 'reload';
   }
   window.STATUS_CSS = cssGuard;
+  // ── 新しい版の知らせ（2026-11-25 PO「今見たけど辞書何も変わってないね」: 公開の後も、端末が前の画面を出していた。
+  //   GitHub Pages は index.html を端末に最大10分覚えさせる＝開き直しても前の台本の組で動く。台本の ?v= の印は index.html が古いと効かない）
+  //   公開の置き場の ver.js（いまの版の字だけ）を毎回ちがうアドレスで読み（覚えを通らない）、動いている画面の版と比べる。
+  //   開いた直後でまだ何も押していない → その場で1回だけ読み直す（ログインの戻りの直後は札を失わないよう読み直さない）。
+  //   使っている途中（タブに戻った・20分ごと）→ 上に「新しい版があります［読み直す］」（見ている所を勝手に消さない）。
+  //   読み直してもまだ前の版（公開の置き場に行き渡る前）→ 続けて読み直さず知らせだけ（くり返さない）
+  var VER = { last: 0, done: false, touched: !!window.__oauthHash };
+  function verShort(b) { return String(b || '').replace(/^status-web-\d{4}-/, ''); }
+  function verBand(latest) {
+    VER.done = true;
+    if (document.getElementById('newver')) return;
+    var cur = (window.STOREOPS_CONFIG || {}).build;
+    var d = document.createElement('div'); d.id = 'newver'; d.setAttribute('role', 'status');
+    d.innerHTML = '<span>新しい版があります<small></small></span><button type="button">読み直す</button>';
+    d.querySelector('small').textContent = '（いま ' + verShort(cur) + ' → ' + verShort(latest) + '）';
+    d.querySelector('button').addEventListener('click', function () { location.reload(); });
+    document.body.appendChild(d);
+  }
+  function verCheck(why) {
+    var cur = (window.STOREOPS_CONFIG || {}).build; if (!cur || VER.done) return;   // 作業用の画面（版の字なし）は比べない
+    VER.last = Date.now();
+    window.__storeopsVer = function (latest) {
+      window.__storeopsVer = null;
+      if (typeof latest !== 'string' || !/^status-web-\d{4}-\d{2}-\d{2}[a-z]$/.test(latest)) return;
+      if (latest === cur) { try { sessionStorage.removeItem('storeops_reload_to'); } catch (e) { /* 覚えられない端末は知らせだけになる */ } return; }
+      var tried = ''; try { tried = sessionStorage.getItem('storeops_reload_to') || ''; } catch (e) { tried = latest; }
+      if (why === 'boot' && !VER.touched && tried !== latest) {
+        try { sessionStorage.setItem('storeops_reload_to', latest); } catch (e) { verBand(latest); return; }
+        VER.done = true; location.reload(); return;
+      }
+      verBand(latest);
+    };
+    var s = document.createElement('script');
+    s.src = 'ver.js?t=' + Date.now();
+    s.onload = s.onerror = function () { s.remove(); };
+    document.head.appendChild(s);
+  }
+  window.STATUS_VER = verCheck;
+  ['pointerdown', 'keydown'].forEach(function (t) { document.addEventListener(t, function () { VER.touched = true; }, { capture: true, once: true }); });
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible' && Date.now() - VER.last > 60000) verCheck('back'); });
+  setInterval(function () { if (document.visibilityState === 'visible' && Date.now() - VER.last > 19 * 60000) verCheck('tick'); }, 5 * 60000);
+  verCheck('boot');   // 台本を読んだその場で（窓口の読み込みと並べて・待ちを足さない）
   document.addEventListener('DOMContentLoaded', function () {
     cssGuard();
     main = $('#main'); FH = $('#fh');

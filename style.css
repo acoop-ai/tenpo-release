@@ -1094,7 +1094,7 @@ details.peerq .sm{font-size:12.5px;color:var(--sub)}
 .guide2 .mk-dovc .c.on{background:#0f172a;color:#fff;border-color:#0f172a}
 .guide2 .mk-dovc .c i,.guide2 .mk-dovt i{display:inline-block;width:13px;height:0;border-top:3px solid;border-color:inherit}
 .guide2 .mk-dovc .c i.ds,.guide2 .mk-dovt i.ds{border-top-style:dashed}
-.guide2 .mk-dovc .c.g{border-color:#4a7dc2}.guide2 .mk-dovc .c.g.we{border-color:#d87a35}
+.guide2 .mk-dovc .c.g{border-color:#2295ce}.guide2 .mk-dovc .c.g.we{border-color:#ce7509}
 .guide2 .mk-dovw{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;align-items:start}
 .guide2 .mk-dovw svg{display:block;width:100%;height:auto}
 .guide2 .mk-dovt{display:flex;flex-direction:column;border:1px solid #b9c6d8;border-radius:8px;padding:3px 7px;font-size:11.5px;background:#fff;box-shadow:0 3px 10px rgba(15,23,42,.12)}
@@ -1118,5 +1118,14 @@ details.peerq .sm{font-size:12.5px;color:var(--sub)}
 @media (max-width:760px){.guide2 .pf-row{grid-template-columns:1fr}.guide2 .pf-ar{transform:rotate(90deg);justify-self:center}}
 /* 社内の生成AI利用ガイドライン 6.(4)（決まりの原本＝ハブ 50_operations\rule_genai_label_on_outputs.md・PO 11/25 夕方）: 画面のいちばん下（フッター）と利用ガイドのいちばん最後に、クレジットとして小さく1行 */
 .aicredit{font-size:12px;color:var(--sub);text-align:right;margin:6px 0 0}
+/* 新しい版の知らせ（s1126a・開いている途中で公開があったとき。上の帯の下の真ん中・押すと読み直す） */
+#newver{position:fixed;left:50%;top:calc(var(--hdr) + 8px);transform:translateX(-50%);z-index:96;display:flex;align-items:center;gap:10px;background:var(--brand);color:#fff;border-radius:999px;padding:6px 8px 6px 16px;font-size:14px;box-shadow:0 2px 10px rgba(0,0,0,.18);max-width:calc(100vw - 32px);box-sizing:border-box}
+#newver small{font-size:12px;opacity:.85;margin-left:4px}
+#newver button{background:#fff;color:var(--brand);border:0;border-radius:999px;padding:6px 16px;min-height:34px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap}
+#newver button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+@media (max-width:480px){#newver small{display:none}}
+/* 曜日の色の移り変わり（s1126a）: 強める線の札「平日」「土日祝」の見本は、月→金・土→祝の色をそのまま並べた帯 */
+.dovc i.gr{border-top:0;height:4px;border-radius:2px;background:var(--g)}
+.shp .sc i{border:1px solid rgba(15,23,42,.12)}
 
-:root{--css-build:"status-web-2026-11-25a"}
+:root{--css-build:"status-web-2026-11-26a"}
