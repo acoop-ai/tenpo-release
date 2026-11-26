@@ -17,7 +17,7 @@ a{color:var(--brand)}
 #acct{position:relative}
 #acctbtn .al{min-width:0;max-width:22em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #acctbtn svg{flex:0 0 auto}
-#acctmenu{position:absolute;right:0;top:42px;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:6px;min-width:250px;display:none;z-index:60}
+#acctmenu{position:absolute;right:0;top:42px;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:6px;min-width:250px;max-width:calc(100vw - 16px);box-sizing:border-box;display:none;z-index:60}
 #acctmenu.on{display:block}
 #acctmenu .who{font-size:13px;color:var(--sub);padding:4px 10px 6px;border-bottom:1px solid #eef2f7;margin-bottom:4px;word-break:break-all}
 #acctmenu button{display:block;width:100%;text-align:left;border:0;background:none;padding:8px 10px;border-radius:7px;cursor:pointer;font-size:14.5px}
@@ -329,7 +329,7 @@ main .hint,main p{max-width:72em}
 #gate .gttl{font-weight:800;font-size:19px;color:var(--brand);margin-bottom:6px}
 #gate p{margin:10px 0 14px;line-height:1.6}
 #gate p.err{color:var(--dn);font-weight:700}
-#gate button{border:0;background:var(--brand);color:#fff;border-radius:10px;height:46px;padding:0 22px;font-weight:800;cursor:pointer}
+#gate .gin>button,#gate .gplain button{border:0;background:var(--brand);color:#fff;border-radius:10px;height:46px;padding:0 22px;font-weight:800;cursor:pointer}
 body.locked{overflow:hidden}
 #acctmenu .note{font-size:12px}.figt{font-weight:800;font-size:14px;color:#1e3a5f;margin:8px 0 4px}
 details.det .lz p{margin:.4rem 0;line-height:1.6}
@@ -1127,5 +1127,101 @@ details.peerq .sm{font-size:12.5px;color:var(--sub)}
 /* 曜日の色の移り変わり（s1126a）: 強める線の札「平日」「土日祝」の見本は、月→金・土→祝の色をそのまま並べた帯 */
 .dovc i.gr{border-top:0;height:4px;border-radius:2px;background:var(--g)}
 .shp .sc i{border:1px solid rgba(15,23,42,.12)}
+/* ── ミツバチ（s1127a・PO 2026-11-26「ハチの動きOK　他へ広げて下さい」・部品＝mitsubachi.css〈_共通\ミツバチ の写し〉）。部品の色は、この画面の言葉を借りる（地は白・字は画面の字・釦は画面の青） */
+#gate .gin,#beepick,.guide2 .gbee,.res .nohit,.bee-demo-cap{--mb-surface:#fff;--mb-ink:var(--ink);--mb-muted:var(--sub);--mb-line:var(--line);--mb-btn-bg:var(--brand);--mb-btn-ink:#fff;--mb-btn-edge:var(--brand)}
+/* 幕の待ち: 開いた直後は透明（押せなくするだけ）・0.3 秒を超えたら幕を敷いてカード（ハチ＋字）。やり直せば直るエラーも同じ所（ハチの困り顔＋理由＋もう一度） */
+#gate.g-wait:not(.is-shown){background:transparent}
+#gate.g-wait:not(.is-shown) .gin{visibility:hidden}
+#gate.g-wait .gin,#gate.g-err .gin{max-width:540px;text-align:left;padding:18px 18px 14px}
+#gate.g-wait .gin{max-width:460px}
+#gate.g-wait .gttl,#gate.g-err .gttl{text-align:center}
+#gate p[hidden]{display:none}
+#gate-card:empty{display:none}
+#gate-card .mb-wait{justify-content:center;padding:4px 0}
+#gate-card .mb-err{padding:6px 4px}
+#gate .gplain{display:grid;gap:8px;justify-items:center;text-align:center}
+#gate .gplain p{margin:0}
+#gate .gplain .gp2{background:#fff;color:var(--brand);border:1.5px solid var(--brand)}
+@media (max-width:480px){#gate.g-wait .gin,#gate.g-err .gin{padding:14px 10px}#gate-card .mb-err{flex-direction:column;align-items:flex-start;gap:6px}}
+/* 探して0件: 止まったハチ・ひとこと・言葉の例（押すと探す） */
+.res .nohit{padding:6px 4px 0}
+.res .nohit .mb-empty{padding:8px 10px;gap:10px}
+.res .nohit .mb-ttl{font-size:15px;word-break:break-all}
+/* 言葉の例の札は字の幅（前は .res button の「幅いっぱい」が勝って、横長の釦が縦に並んでいた＝s1127a の見つからないときの次の一手で見つけた） */
+.res .chips button{display:inline-flex;align-items:center;width:auto;border:1px solid #c7d3e3;background:#f6f9fd;border-radius:999px;padding:3px 11px;font-size:13.5px;min-height:32px;line-height:1.3}
+.res .chips button:hover{background:var(--brand2)}
+/* 右上のアカウントのメニュー（▾）の中: 待つ間のハチの絵（もふ／むぎわら）と、ハチの見本の入口 */
+#beepick{border-top:1px dashed var(--line);border-bottom:1px solid #eef2f7;margin:2px 0 4px;padding:6px 4px 6px}
+#beepick[hidden]{display:none}
+#beepick .bph{padding:0 6px 6px;font-size:13px;line-height:1.45}
+#beepick .bph b{display:block;font-size:13.5px}
+#beepick .bph small{display:block;color:var(--sub);font-size:12.5px}
+#beepick .mb-pick{padding:0 6px;flex-wrap:nowrap;white-space:nowrap}
+#acctmenu .mb-pick .mb-pick-btn{display:inline-flex;width:auto;padding:2px 10px 2px 4px;border:1.5px solid var(--line);background:#fff;border-radius:999px;font-size:14px}
+#acctmenu .mb-pick .mb-pick-btn[aria-pressed="true"]{background:#fff4d6;border:2px solid var(--brand);font-weight:700}
+#beepick .mb-pick-note{margin:4px 6px 0}
+#acctmenu .bee-demo-open{margin-top:6px}
+#acctmenu .bee-demo-open strong{display:block;font-size:14.5px}
+#acctmenu .bee-demo-open small{display:block;font-size:12.5px;color:var(--sub);line-height:1.45}
+/* 利用ガイドの「待つ間のハチの絵」の節: 選ぶ所と見本の入口（置き場の中の字は、前の画面で読んだときの案内） */
+.guide2 .gbee{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
+.guide2 .gbee>div{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.guide2 .gbee h3{margin:0 0 6px;font-size:17px}
+.guide2 .gbee .gslot{min-height:44px;display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.guide2 .gbee .gslot.on .fb{display:none}
+.guide2 .gbee .gbd{border:2px solid var(--brand);background:#fff;color:var(--brand);border-radius:10px;min-height:44px;padding:0 16px;font-weight:800;cursor:pointer}
+.guide2 .gbee .gbd:hover{background:var(--brand2)}
+.guide2 .gflow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0}
+.guide2 .gflow span{border:1px solid #b9c6d8;border-radius:8px;padding:3px 10px;background:#f8fafc;font-weight:700;font-size:14.5px}
+.guide2 .gflow i{font-style:normal;color:#64748b;font-weight:800}
+.guide2 .gwhen{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;margin:0 0 10px}
+.guide2 .gwhen>div{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:15px}
+.guide2 .gwhen b{display:block;color:#0b3a7e}
+@media (max-width:900px){.guide2 .gbee{grid-template-columns:1fr}}
+/* ハチの見本: 上の帯と同じ所に見本の帯（← 元の画面へ戻る）・左に場面の一覧（12）・場面の上に進める釦と説明（大きめ）。本物の幕（#gate）は見本の間だけ場面の置き場に収める（bee-demo.js が上と左を決める） */
+body.beedemo{overflow:hidden}
+.bee-demo-bar{position:fixed;top:0;left:0;right:0;z-index:103;display:flex;align-items:center;gap:8px 10px;flex-wrap:wrap;padding:6px 14px;min-height:48px;background:#2b2418;color:#fff;box-sizing:border-box}
+.bee-demo-bar .bd-badge{background:#f0b531;color:#3b2a1a;border-radius:6px;padding:1px 8px;font-weight:800;font-size:14px;white-space:nowrap;flex:none}
+.bee-demo-bar .bd-sp{flex:none;display:block;height:1px}
+.bee-demo-bar .bd-nav{display:flex;gap:6px;flex:none}
+.bee-demo-bar .bd-nav button{border:1px solid #f0d28a;background:#fff;color:#1f2933;border-radius:8px;height:36px;padding:0 10px;font-size:13.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+.bee-demo-bar .bd-nav button:hover{background:#fff4d6}
+.bee-demo-bar .bd-lead{font-size:14px;min-width:0}
+.bee-demo-bar .bd-keys{margin-left:auto;font-size:13px;opacity:.9;white-space:nowrap}
+.bee-demo-list{position:fixed;left:0;bottom:0;width:250px;z-index:102;overflow:auto;overscroll-behavior:contain;padding:8px 8px 16px;background:#fffdf5;border-right:1px solid #e8d49a;box-sizing:border-box}
+.bee-demo-list[hidden]{display:none}
+.bee-demo-list .bdl-title{margin:2px 6px 4px;font-weight:800;font-size:15px;color:#3b2a1a}
+.bee-demo-list .bdl-head{margin:8px 6px 2px;font-size:13px;font-weight:700;color:#6b4e16}
+.bee-demo-list .bdl-item{display:flex;align-items:center;gap:8px;width:100%;min-height:40px;margin-bottom:2px;padding:4px 8px;text-align:left;background:none;border:0;border-left:4px solid transparent;border-radius:6px;color:var(--ink);font-size:14.5px;cursor:pointer}
+.bee-demo-list .bdl-item:hover{background:#fff1c9}
+.bee-demo-list .bdl-item[aria-current="step"]{background:#ffe8a3;border-left-color:#c98a06;font-weight:700}
+.bee-demo-list .bdl-n{flex:none;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#fff;border:1px solid #c98a06;color:#6b4e16;font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums}
+.bee-demo-list .bdl-item[aria-current="step"] .bdl-n{background:#c98a06;color:#fff}
+.bee-demo-list.is-drop{width:auto;right:0;bottom:auto;max-height:60vh;border-right:0;border-bottom:1px solid #e8d49a;box-shadow:0 8px 18px rgba(0,0,0,.18)}
+.bee-demo-cap{position:fixed;left:0;right:0;z-index:102;display:grid;gap:4px;padding:10px 18px;background:#fff8e1;color:#3b2a1a;border-bottom:1px solid #e8d49a;box-sizing:border-box}
+.bee-demo-cap .bd-row{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px}
+.bee-demo-cap .bd-btn{border:1px solid #b9c6d8;background:#fff;border-radius:8px;min-height:40px;padding:0 14px;font-weight:700;font-size:14.5px;cursor:pointer;white-space:nowrap}
+.bee-demo-cap .bd-btn:disabled{opacity:.45;cursor:default}
+.bee-demo-cap .bd-btn[hidden]{display:none}
+.bee-demo-cap .bd-pri{background:var(--brand);border-color:var(--brand);color:#fff}
+.bee-demo-cap .bd-count{min-width:4.2em;text-align:center;font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.bee-demo-cap .bd-autobox{display:inline-flex;align-items:center;gap:6px;margin-left:auto}
+.bee-demo-cap .bd-auto[aria-pressed="true"],.bee-demo-cap .bd-pause[aria-pressed="true"]{background:#f0b531;color:#3b2a1a;border-color:#c98a06}
+.bee-demo-cap .bd-left{font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.bee-demo-cap .bd-title{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;margin-top:4px}
+.bee-demo-cap .bd-style{border:1px solid #c98a06;border-radius:999px;padding:0 10px;font-size:14px;white-space:nowrap;background:#fff}
+.bee-demo-cap .bd-name{font-size:21px}
+.bee-demo-cap .bd-when{margin:0;font-size:17px;line-height:1.5;max-width:60em}
+.bee-demo-cap .bd-note{margin:0;font-size:14px;color:#5d4a1f;max-width:70em}
+.bee-demo-cap .bd-note[hidden],.bee-demo-cap .bd-still[hidden]{display:none}
+.bee-demo-cap .bd-still{margin:0;font-size:14px;font-weight:700}
+.bee-demo-shield{position:fixed;inset:0;z-index:98;background:transparent}
+.bee-demo-stage{position:fixed;left:0;right:0;bottom:0;z-index:99;background:var(--bg);overflow:auto}
+.bee-demo-stage.is-find{display:flex;justify-content:center;align-items:flex-start;padding:28px 16px}
+.bee-demo-stage .bd-find{position:relative;width:min(620px,100%)}
+.bee-demo-stage .bd-q{height:36px;border:2px solid var(--brand);border-radius:9px;padding:0 10px;background:#fff;display:flex;align-items:center;font-size:15px}
+.bee-demo-stage .bd-res{position:static;display:block;margin-top:4px;max-height:none}
+@media (max-width:900px){.bee-demo-bar .bd-keys{display:none}.bee-demo-bar .bd-lead{flex-basis:100%;order:3}}
+@media (max-width:760px){.bee-demo-cap{padding:8px 10px}.bee-demo-cap .bd-name{font-size:19px}.bee-demo-cap .bd-when{font-size:15.5px}.bee-demo-cap .bd-long{display:none}.bee-demo-cap .bd-autobox{margin-left:0}}
 
-:root{--css-build:"status-web-2026-11-26a"}
+:root{--css-build:"status-web-2026-11-27a"}

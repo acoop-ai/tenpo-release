@@ -1,0 +1,101 @@
+/* >>> mitsubachi 0.3.1・正の印 90ba258c78c4・mitsubachi.css の写し（_共通\ミツバチ から make_copies.py が書く・手で直さない） <<< */
+/* ミツバチの共通部品の見た目 0.3.1（段0・2026-11-24／0.3.0＝待ちのハチが 8 の字に飛ぶ・0.3.1＝8 の字で奥へ行って手前へ戻る・2026-11-25）— 正はこのファイル（Desktop\ClaudeCode\_共通\ミツバチ\mitsubachi.css）。写しは make_copies.py が作る・手で直さない。
+   色は画面（ホスト）の言葉を借りる: --mb-surface・--mb-ink・--mb-muted・--mb-line・--mb-btn-bg・--mb-btn-ink・--mb-btn-edge。無ければ下の既定（はちみつの黄）。
+   蜂の絵の色（はちみつの黄・こげ茶の線）は全システムで同じ。字体は画面の物（外から読む字体は使わない）。 */
+.mb-wait, .mb-err, .mb-empty, .mb-done, .mb-pick {
+  --mb-s: var(--mb-surface, #fff); --mb-i: var(--mb-ink, #2b2418); --mb-m: var(--mb-muted, #5d5444);
+  --mb-l: var(--mb-line, #e4e0d2); --mb-bb: var(--mb-btn-bg, #f0b531); --mb-bi: var(--mb-btn-ink, #3b2a1a); --mb-be: var(--mb-btn-edge, #c98a06);
+  color: var(--mb-i); font: inherit; line-height: 1.55;
+}
+.mb-bee { display: inline-block; flex: none; line-height: 0; }
+.mb-bee svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.mb-s24 { width: 24px; height: 24px; } .mb-s32 { width: 32px; height: 32px; } .mb-s48 { width: 48px; height: 48px; } .mb-s56 { width: 56px; height: 56px; }
+.mb-s64 { width: 64px; height: 64px; } .mb-s96 { width: 96px; height: 96px; } .mb-s128 { width: 128px; height: 128px; }
+/* 濃い色の帯の上では、クリーム色の丸を敷く（線の色が地に沈まない） */
+.mb-halo { border-radius: 50%; background: #fff6dc; box-shadow: 0 0 0 2px rgba(255, 246, 220, .6); padding: 2px; box-sizing: content-box; }
+
+/* ---------- 待ち（字が先・蜂は横に添える） ---------- */
+.mb-wait { display: flex; align-items: center; gap: 10px; padding: 6px 16px 6px 6px; }
+.mb-stage { position: relative; flex: none; width: 64px; height: 74px; }
+.mb-fly { position: absolute; left: 4px; top: 6px; width: 56px; height: 56px; will-change: transform; }
+.mb-v { position: absolute; inset: 0; }
+.mb-v svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.mb-f { position: absolute; inset: 0; will-change: opacity; }
+.mb-f1 { opacity: 0; }
+.mb-shadow { position: absolute; left: 16px; bottom: 2px; width: 32px; height: 7px; border-radius: 50%; background: rgba(60, 40, 10, .14); will-change: transform; }
+/* 8 の字に飛ぶ（0.3.0）: 飛ぶ所は横 136px・縦 90px。ハチ（48px）は真ん中から左右 40px・上下 14px の 8 の字を回る（動きは mitsubachi.js の transform と opacity だけ）
+   0.3.1: 奥へ行って手前へ戻る（大きさ 0.70〜1.15 倍・奥は少し淡く）。影は地面の上で、手前は大きく濃く下へ・奥は小さく淡く上へ（濃さは opacity で 0.45〜1） */
+.mb-loop { width: 136px; height: 90px; }
+.mb-loop .mb-fly { left: 44px; top: 17px; width: 48px; height: 48px; will-change: transform, opacity; }
+.mb-loop .mb-shadow { left: 52px; bottom: 5px; width: 32px; height: 6px; background: rgba(60, 40, 10, .2); will-change: transform, opacity; }
+/* 飛ぶ絵の版（0.3.1）: 窓（80px・はみ出しを切る）から1枚だけ見せる。版は 3 行（横向き・斜め後ろ・斜め前）× 2 列（羽の角度）。
+   行は mitsubachi.js が版を縦に・羽ばたきは横にずらす（transform だけ）。1枚は 48px で、80px の升の真ん中（羽や触角のはみ出しが隣の升に入らない） */
+.mb-loop .mb-win { position: absolute; left: -16px; top: -16px; width: 80px; height: 80px; overflow: hidden; }
+.mb-loop .mb-rows, .mb-loop .mb-cols { position: absolute; left: 0; top: 0; width: 160px; height: 240px; will-change: transform; }
+.mb-loop .mb-cell { position: absolute; width: 48px; height: 48px; }
+.mb-loop .mb-cell svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.mb-loop .mb-r0 { top: 16px; } .mb-loop .mb-r1 { top: 96px; } .mb-loop .mb-r2 { top: 176px; }
+.mb-loop .mb-k0 { left: 16px; } .mb-loop .mb-k1 { left: 96px; }
+.mb-rest { display: none; position: absolute; left: 4px; top: 6px; width: 56px; height: 56px; }
+.mb-rest svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.mb-wtxt { display: grid; gap: 2px; min-width: 12em; max-width: 30em; }
+.mb-cap { font-weight: 700; font-size: 15px; }
+.mb-wait .mb-sub { font-size: 13.5px; color: var(--mb-m); min-height: 1.55em; }
+.mb-slow .mb-sub { color: var(--mb-i); font-weight: 700; }
+/* 動きなし（端末の「動きを減らす」・setMotion(false)）: 止めた正面の1枚・影は出さない（飛ぶ所は 0.2.0 と同じ 64×74 に縮める） */
+.mb-still .mb-shadow, .mb-noanim .mb-shadow { display: none; }
+.mb-still .mb-loop, .mb-noanim .mb-loop { width: 64px; height: 74px; }
+.mb-still .mb-loop .mb-fly, .mb-noanim .mb-loop .mb-fly { display: none; }
+.mb-still .mb-rest, .mb-noanim .mb-rest { display: block; }
+.mb-still .mb-f1, .mb-noanim .mb-f1 { opacity: 0; }
+.mb-still .mb-f0, .mb-noanim .mb-f0 { opacity: 1; }
+/* 巣（本当の進み具合があるときだけ・縦に置く） */
+.mb-wait-comb { display: grid; justify-items: center; padding: 8px 12px 10px; }
+.mb-wait-comb .mb-wtxt { justify-items: center; text-align: center; }
+.mb-comb { position: relative; width: min(100%, 220px); }
+.mb-comb svg { display: block; width: 100%; height: auto; }
+.mb-hx { fill: none; stroke: var(--mb-l); stroke-width: 3; stroke-linejoin: round; }
+.mb-hf { fill: #f5be3c; stroke: #d9961a; stroke-width: 2; stroke-linejoin: round; transform-box: fill-box; transform-origin: center; transform: scale(0); transition: transform .45s cubic-bezier(.3, 1.6, .5, 1); }
+.mb-hf.on { transform: scale(1); }
+.mb-still .mb-hf { transition: none; }
+.mb-flyer { position: absolute; transform: translate(-50%, -50%); transition: left .5s cubic-bezier(.4, 1.3, .5, 1), top .5s cubic-bezier(.4, 1.3, .5, 1); }
+.mb-still .mb-flyer { transition: none; }
+.mb-pct { font-weight: 800; font-size: 20px; font-variant-numeric: tabular-nums; }
+
+/* ---------- エラー・空・できた ---------- */
+.mb-err, .mb-empty { display: flex; align-items: center; gap: 14px; padding: 12px 16px 12px 12px; }
+.mb-txt { display: grid; gap: 3px; justify-items: start; min-width: 0; max-width: 34em; }
+.mb-ttl { font-weight: 800; font-size: 16px; }
+.mb-err .mb-sub, .mb-empty .mb-sub { font-size: 14px; color: var(--mb-m); text-align: left; }
+.mb-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.mb-btn { font: inherit; font-weight: 700; font-size: 14.5px; color: var(--mb-bi); background: var(--mb-bb); border: 1px solid var(--mb-be); border-radius: 8px; padding: 6px 18px; min-height: 40px; white-space: nowrap; cursor: pointer; }
+.mb-empty .mb-btn { margin-top: 6px; }
+.mb-btn:hover:not(:disabled) { filter: brightness(1.06); }
+.mb-btn:disabled { opacity: .55; cursor: default; }
+.mb-btn:focus-visible, .mb-pick-btn:focus-visible { outline: 3px solid #1d4ed8; outline-offset: 2px; }
+.mb-btn-ghost { background: transparent; color: var(--mb-i); border: 1.5px solid var(--mb-l); }
+.mb-wob { animation: mb-wob .5s ease-in-out 2; }
+@keyframes mb-wob { 25% { transform: translateX(-4px) rotate(-5deg) } 75% { transform: translateX(4px) rotate(5deg) } }
+.mb-done { display: inline-flex; align-items: center; gap: 8px; }
+.mb-hop { animation: mb-hop .7s ease-out 1; }
+@keyframes mb-hop { 30% { transform: translateY(-12px) scale(1.08) } 60% { transform: translateY(0) scale(.96) } }
+
+/* ---------- 絵の案を選ぶ所（ハチ：もふ／むぎわら） ---------- */
+.mb-pick { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.mb-pick-label { font-weight: 700; font-size: 14px; }
+.mb-pick-btn { display: inline-flex; align-items: center; gap: 4px; min-height: 40px; padding: 2px 10px 2px 4px; font: inherit; font-size: 14px; color: var(--mb-i); background: var(--mb-s); border: 1.5px solid var(--mb-l); border-radius: 999px; cursor: pointer; }
+.mb-pick-btn:hover { border-color: var(--mb-be); }
+.mb-pick-btn[aria-pressed="true"] { background: #fff4d6; border: 2px solid var(--mb-be); font-weight: 700; }
+.mb-pick-btn[aria-pressed="true"]::after { content: "✓"; margin-left: 2px; }
+/* 止まって見える訳（端末の「動きを減らす」がオンの時だけ） */
+.mb-pick-note { margin: 4px 0 0; font-size: 13px; line-height: 1.45; color: var(--mb-muted, #5d5444); white-space: normal; max-width: 24em; }
+.mb-pick-note[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mb-wob, .mb-hop { animation: none !important; }
+  .mb-hf, .mb-flyer { transition: none !important; }
+}
+/* 印刷: 絵は出さない（字は残す） */
+@media print {
+  .mb-bee, .mb-stage, .mb-comb .mb-flyer, .mb-pick, .mb-pick-note { display: none !important; }
+}

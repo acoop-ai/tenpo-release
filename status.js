@@ -183,7 +183,8 @@ var STORE_ORDER = [
   function setBack() { var d = !HIST.length; $$('[data-nav="back"]').forEach(function (b) { b.disabled = d; }); }
   /** 探す欄（上の帯の中・11/17e PO「検索窓もわざわざ行を使わず、ヘッダに入れ込んでね」）: 空のまま押すと、困りごとの言葉の例を欄のすぐ下に */
   function qExamples() {
-    var w = ME && ME.role === 'store' ? ['売場が溢れる', 'ロスが多い', '予約が伸びない', '雨の日', '欠品'] : ['予約が伸びない', '見切り', '節分', '進捗', 'ぎゅうにゅう'];
+    // s1127a: 例は押すと必ず当たる言葉だけ（「売場が溢れる」は辞書の中身に当たりが無く、見つからないときの次の一手で、また「見つかりませんでした」に戻っていた → 「売れ残り」）
+    var w = ME && ME.role === 'store' ? ['売れ残り', 'ロスが多い', '予約が伸びない', '雨の日', '欠品'] : ['予約が伸びない', '見切り', '節分', '進捗', 'ぎゅうにゅう'];
     return '<div class="eg"><div class="lb">例（押すと探します）。ひらがな・カタカナ・ローマ字のどれでも当たります</div><div class="chips">' + w.map(function (x) { return '<button type="button" data-q="' + esc(x) + '">' + esc(x) + '</button>'; }).join('') + '</div></div>';
   }
 
@@ -302,6 +303,7 @@ var STORE_ORDER = [
   }
   /** ガイドを描いたあと: 画面の地図の「いまここ」（ガイドを開く前の画面）・狭い画面ではつながりの箱を閉じる・いまここの見つけ方の最初の例 */
   function gdAfter() {
+    gdBee();
     var root = $('#smap', main); if (!root) return;
     var h = GD.here || { scr: 'home', nm: '' };
     $$('.here', root).forEach(function (x) { x.classList.remove('here'); });
@@ -312,6 +314,15 @@ var STORE_ORDER = [
     var nm = $('#gnow', main); if (nm) nm.textContent = h.nm || '―';
     if (window.innerWidth <= 760) $$('details.conn', main).forEach(function (x) { x.open = false; });
     var first = $('.hx', main); if (first) gdSetHere(first);
+  }
+  /** s1127a: 利用ガイドの「待つ間のハチの絵」の節（窓口の Guide.html・tools\build_guide.py）の2つの置き場に、選ぶ所と見本の入口を入れる。
+   *  置き場の中の字（前の画面で読んだときの案内）は、ここで入れ替わる。選ぶ所は1回だけ作って使い回す（ガイドを描き直すたびに聞き手を増やさない） */
+  var GBP = null;
+  function gdBee() {
+    var slot = $('[data-beepick]', main);
+    if (slot && MB) { if (!GBP) { GBP = document.createElement('div'); GBP.className = 'gbp'; MB.picker(GBP, { label: '待つ間のハチの絵を選ぶ' }); } slot.replaceChildren(GBP); slot.classList.add('on'); }
+    var ds = $('[data-beedemo]', main), D = window.STATUS_BEE_DEMO;
+    if (ds && D) { var b = document.createElement('button'); b.type = 'button'; b.className = 'gbd'; b.textContent = 'ハチの見本を見る ▸'; b.addEventListener('click', function () { D.start(b); }); ds.replaceChildren(b); ds.classList.add('on'); }
   }
   function openGuide() {
     if (S.view === 'guide') { if (S.from && FROMS[S.from]) fromBack(); return; }   // ガイドの中でもう一度押すと、来た所へ
@@ -3188,7 +3199,7 @@ var STORE_ORDER = [
     if (!DICT) { loadDict(); box.innerHTML = '<div class="none"><span class="spin" aria-hidden="true"></span> 辞書の中身を読み込んでいます…</div>'; box.classList.add('on'); DICT_P && DICT_P.then(function () { if (inp.value.trim()) search(inp, box); }); return; }
     if (!IDX) buildIdx();
     var Q = SN ? SN.terms(raw) : null, hits = IDX.filter(function (x) { return SN ? SN.hit(x.key, Q) : x.key.indexOf(raw.toLowerCase()) >= 0; }).sort(function (a, b) { return a.o - b.o; });
-    if (!hits.length) { box.innerHTML = '<div class="none">「' + esc(raw) + '」は見つかりませんでした。ちがう言い方で探してください（例: 欠品 → 品切れ・ロス → 見切り）。</div>'; box.classList.add('on'); return; }
+    if (!hits.length) { searchNone(box, raw); return; }   // s1127a: 止まったハチ・ひとこと・言葉の例（押すと探す）
     var h = '<div class="cnt">' + hits.length + '件' + (hits.length > 50 ? '（上から50件）' : '') + '</div>', g = '';
     hits.slice(0, 50).forEach(function (x, i) { if (x.k !== g) { g = x.k; h += '<div class="grp">' + esc(g) + '</div>'; } h += '<button type="button" role="option" data-hit="' + IDX.indexOf(x) + '"' + (i ? '' : ' class="act"') + '><span class="k">' + esc(x.k) + '</span>' + mark(x.t, Q) + (x.s ? '<span class="s">' + mark(String(x.s).slice(0, 80), Q) + '</span>' : '') + '</button>'; });
     box.innerHTML = h; box.classList.add('on');
@@ -3502,14 +3513,66 @@ var STORE_ORDER = [
   }
 
   // ── 入口の重ね（ログイン・読み込み中）
-  function showGate(text, isErr, onBtn) {
-    var g = $('#gate'); g.hidden = false; document.body.classList.add('locked');
-    $('#gate-msg').textContent = text; $('#gate-msg').classList.toggle('err', !!isErr);
+  // s1127a（PO 2026-11-26「ハチの動きOK　他へ広げて下さい」・決まり＝ハブ 40_projects_index\project_mitsubachi_character.md）: 共通の部品 mitsubachi.js（_共通\ミツバチ の写し）のハチを、幕の字の横に添える。
+  //   待ち（開く・ログインを確かめる）: 開いた直後は透明の幕で押せなくするだけ。0.3 秒を超えたら幕を敷き、ハチ（8 の字に飛ぶ）と「〜しています」のカード（0.3 秒までに終われば何も作らない）。
+  //     8 秒で字の下に「時間がかかっています（通信を確かめています）」。30 秒は auth.js が待つのをやめる → やり直せば直るエラー（通信・30 秒・窓口の一時の誤り）は、
+  //     同じ幕にハチの困り顔・理由・「もう一度」（showRetry）。人が直す誤り（ログインの期限・札が違う・使えないアカウント）は、いままでどおり字とログインの釦（ハチは出さない）。
+  //   部品が読めない端末でも、前と同じ字と回る印で動く。opt.style・o.style は、ハチの見本（bee-demo.js）だけが使う＝絵の案をこの1枚だけ決める（選びは変えない）
+  var MB = window.Mitsubachi || null, GW = { h: null };
+  var NETMSG = { offline: '通信できませんでした。通信の状態を確かめて、もう一度お試しください。', timeout: '30 秒たっても返事がありませんでした。通信の状態を確かめて、もう一度お試しください。' };
+  function netText(e) { return e && e.code === 'TIMEOUT' ? NETMSG.timeout : NETMSG.offline; }
+  function gateClear() { if (GW.h) { GW.h.end(); GW.h = null; } $('#gate-card').replaceChildren(); $('#gate').classList.remove('g-wait', 'g-err', 'is-shown'); }
+  function gateOpen() { var g = $('#gate'); g.hidden = false; document.body.classList.add('locked'); return g; }
+  function showGate(text, isErr, onBtn, label) {
+    gateClear(); var g = gateOpen(); g.classList.add('is-shown');
+    var m = $('#gate-msg'); m.hidden = false; m.textContent = text; m.classList.toggle('err', !!isErr);
     $('#gate-busy').hidden = true;
-    var b = $('#gate-login'); b.hidden = !onBtn; b.onclick = onBtn || null;
+    var b = $('#gate-login'); b.hidden = !onBtn; b.onclick = onBtn || null; b.textContent = label || 'Google でログイン';
   }
-  function showBusy(text) { var g = $('#gate'); g.hidden = false; document.body.classList.add('locked'); $('#gate-msg').textContent = text; $('#gate-msg').classList.remove('err'); $('#gate-busy').hidden = false; $('#gate-login').hidden = true; }
-  function hideGate() { $('#gate').hidden = true; document.body.classList.remove('locked'); }
+  function showBusy(text, opt) {
+    var g = gateOpen(), o = opt || {};
+    if (GW.h && !GW.h.ended) { GW.h.stage(text); return; }   // 段の字を替える（8 秒を数え直す）
+    gateClear(); $('#gate-login').hidden = true;
+    if (MB) { $('#gate-msg').hidden = true; $('#gate-busy').hidden = true; g.classList.add('g-wait'); GW.h = MB.wait($('#gate-card'), { text: text, delay: 300, slowMs: 8000, style: o.style, onShown: function () { g.classList.add('is-shown'); } }); return; }
+    var m = $('#gate-msg'); m.hidden = false; m.textContent = text; m.classList.remove('err'); $('#gate-busy').hidden = false; g.classList.add('is-shown');   // 部品が無いとき（前と同じ形）
+  }
+  /** やり直せば直るエラー（通信・30 秒・窓口の一時の誤り）を、待ちの幕の同じ所に。o: { title, text, retry, closeLabel, close, style }。押すと、その場で retry／close（幕は呼んだ先が替える） */
+  function showRetry(o) {
+    gateClear(); var g = gateOpen(); g.classList.add('g-err', 'is-shown');
+    $('#gate-msg').hidden = true; $('#gate-busy').hidden = true; $('#gate-login').hidden = true;
+    var card = $('#gate-card');
+    if (MB) MB.error(card, { title: o.title, text: o.text, retryLabel: 'もう一度', onRetry: function () { if (o.retry) o.retry(); }, closeLabel: o.closeLabel, onClose: o.close ? function () { o.close(); } : null, size: 's64', style: o.style });
+    else {   // 部品が無いとき（字と釦だけ）
+      var box = document.createElement('div'), t = document.createElement('strong'), p = document.createElement('p');
+      box.className = 'gplain'; box.setAttribute('role', 'alert'); t.textContent = o.title; p.textContent = o.text; box.append(t, p);
+      [['もう一度', o.retry, 'gp1'], [o.closeLabel, o.close, 'gp2']].forEach(function (x) { if (!x[1]) return; var b = document.createElement('button'); b.type = 'button'; b.className = x[2]; b.textContent = x[0]; b.addEventListener('click', function () { b.disabled = true; x[1](); }); box.appendChild(b); });
+      card.appendChild(box);
+    }
+    var first = card.querySelector('button'); if (first) first.focus();
+  }
+  function hideGate() { gateClear(); $('#gate').hidden = true; document.body.classList.remove('locked'); }
+  /** 探して0件（空）: 止まったハチ・ひとこと・次の一手（言葉の例＝押すと探す）。字は全部 textContent（打った字も字のまま）。st は見本だけ（この1枚の絵の案） */
+  function searchNone(box, raw, st) {
+    box.replaceChildren();
+    var w = document.createElement('div'); w.className = 'none nohit';
+    var tt = '「' + raw + '」は見つかりませんでした', sub = 'ちがう言い方で探してください（例: 欠品 → 品切れ・ロス → 見切り）。';
+    if (MB) MB.empty(w, { title: tt, text: sub, size: 's32', style: st }); else w.textContent = tt + '。' + sub;
+    box.appendChild(w); box.insertAdjacentHTML('beforeend', qExamples());
+    box.classList.add('on');
+  }
+  /** アカウントのメニューを画面の中に収める（s1127a: 幅 375 では上の帯が折り返してアカウントの釦が左に来るので、右にそろえたメニューが画面の左の外へ出ていた＝選ぶ所が押せない）。
+   *  開いたときに1回だけ位置を読み、はみ出す分だけ左右をずらす（PC の幅では何もしない） */
+  function acctFit() {
+    var m = $('#acctmenu'); m.style.left = ''; m.style.right = '';
+    if (!m.classList.contains('on')) return;
+    var r = m.getBoundingClientRect(), a = $('#acct').getBoundingClientRect(), vw = document.documentElement.clientWidth;
+    if (r.left < 8) { m.style.right = 'auto'; m.style.left = Math.round(8 - a.left) + 'px'; }
+    else if (r.right > vw - 8) { m.style.right = Math.round(a.right - (vw - 8)) + 'px'; }
+  }
+  /** 右上のアカウントのメニュー（▾）の中に「ハチ：もふ／むぎわら」（この PC のブラウザに覚える・acoop-ai.github.io の画面どうしで同じ選び）。部品が無い端末では出さない */
+  function beeMenu() { var host = $('#beepick'); if (!MB || !host) return; MB.picker(host, { label: '待つ間のハチの絵を選ぶ' }); host.hidden = false; }
+  // ハチの見本（bee-demo.js）が呼ぶ口: 本物の幕・カードの関数をそのまま使う（窓口は呼ばない・データ・札・選びに触らない）
+  window.STATUS_BEE = { busy: showBusy, retry: showRetry, hide: hideGate, none: searchNone, net: NETMSG, closeMenu: function () { $('#acctmenu').classList.remove('on'); }, gateShown: function () { return !$('#gate').hidden; } };
 
   // ── 押す・打つ（聞き耳は document に1つずつ）
   function bind() {
@@ -3539,7 +3602,7 @@ var STORE_ORDER = [
       if (b.id === 'guidebtn') { openGuide(); return; }
       if (ds.sx) { if (narrowNav()) sideOpen(false); sideGo(ds.sx); return; }
       if (b.id === 'upbtn') { if (S.path.length > 1) go({ view: 'status', path: S.path.slice(0, -1) }, { land: true }); return; }
-      if (b.id === 'acctbtn') { $('#acctmenu').classList.toggle('on'); return; }
+      if (b.id === 'acctbtn') { $('#acctmenu').classList.toggle('on'); acctFit(); return; }
       if (b.id === 'logout') { AUTH.logout(); return; }
       if (ds.lens) {   // 左のサイドの画面の木＝タブ（来た所の札は消す）。本文の中の「〇〇を開く」は、来た所の札を出す
         var inSide = !!b.closest('#side'); if (inSide && narrowNav()) sideOpen(false);
@@ -3632,11 +3695,12 @@ var STORE_ORDER = [
     showBusy('読み込んでいます…');
     var t0 = performance.now();
     // 本部の地図は、画面が縮めを解けるとき縮めて受け取る（s1118a: 曜日 × 時刻が入って約 0.5MB → 約 0.25MB）。店の人の返事は前と同じ（地図は入らない）
-    AUTH.call('statusStart', CAN_GZ ? { gz: true } : null).then(function (r) {
+    var again = function () { onReady(email); };
+    AUTH.call('statusStart', CAN_GZ ? { gz: true } : null, { giveUp: AUTH.GIVEUP_MS || 30000 }).then(function (r) {   // s1127a: 30 秒で待つのをやめる（幕の中に理由と「もう一度」）
       if (r && r.ok && r.mapgz) return unzipJson(r.mapgz).then(function (mp) { r.map = mp; delete r.mapgz; return r; }, function () { return { ok: false, error: '全店の数を読み込めませんでした（縮めを解けませんでした）。' }; });
       return r;
     }).then(function (r) {
-      if (!r || !r.ok) { if (r && r.auth) showGate(r.error, true, AUTH.login); else showGate((r && r.error) || '読み込めませんでした。', true, function () { onReady(email); }); return; }
+      if (!r || !r.ok) { if (r && r.auth) showGate(r.error, true, AUTH.login); else showRetry({ title: '開けませんでした', text: (r && r.error) || '読み込めませんでした。', retry: again }); return; }   // 窓口の一時の誤り（「時間をおいてもう一度」）も、やり直せば直る側
       ME = r; DATA = {};
       try { localStorage.setItem('storeops_role_v1', String(r.role || 'none')); } catch (e) { /* 前の辞書の画面が、分析レポートの入口を出すかを決めるだけ（見られる範囲は窓口が決める） */ }
       if (r.role === 'store') { (r.stores || []).forEach(function (c) { DATA[c] = { sum: (r.summaries && r.summaries[c]) || null, none: r.nodata ? r.note : null }; }); useStore(r.stores[0]); }
@@ -3647,13 +3711,13 @@ var STORE_ORDER = [
       $('#builds').textContent = '画面 ' + ((window.STOREOPS_CONFIG || {}).build || '作業用') + '／窓口 ' + (r.build || '―');
       $('#sidever').textContent = '版: 画面 ' + ((window.STOREOPS_CONFIG || {}).build || '作業用') + '／窓口 ' + (r.build || '―');   // 公開の確かめ（左のサイドの下・スクロールせずに見つかる所）   // 公開の確かめ（どの版が出ているか）
       hideGate();
-      try { render({}); } catch (e) { showGate('画面を描けませんでした（' + String(e && e.message || e).slice(0, 80) + '）。開き直してください。', true, function () { location.reload(); }); throw e; }
+      try { render({}); } catch (e) { showGate('画面を描けませんでした（' + String(e && e.message || e).slice(0, 80) + '）。開き直してください。', true, function () { location.reload(); }, '開き直す'); throw e; }
       window.__statusT = { start: performance.now() - t0 };
       if (CUR) ensureTree();
       loadDict();   // 辞書の中身と探す欄の読みの表を、裏で受け取る（型の選び・探すは、そのあと往復 0）
       if (r.role === 'hq' || r.role === 'admin') setTimeout(w32Load, 1200);
       setTimeout(gdFetch, 2500);   // 利用ガイドの中身を、最初の画面のあとに裏で1回（押したときの待ちを 0 に）   // 天気と売れ方の店ごとの違い（分析レポート 3-2 と同じ数）を、最初の画面のあとに裏で受け取る
-    }, function () { showGate('通信できませんでした。通信の状態を確かめて、もう一度お試しください。', true, function () { onReady(email); }); });   // 通信の失敗と、描く所の失敗を分けて知らせる
+    }, function (e) { showRetry({ title: '開けませんでした', text: netText(e), retry: again }); });   // 通信の失敗・30 秒（やり直せば直る）と、描く所の失敗を分けて知らせる
   }
   /** 見た目のファイルが、この画面の版の物か（公開の直後に、古い見た目のファイルと組みで読まれたことがある・2026-11-16）。違えば、版の印つきで読み直す（1回だけ） */
   function cssGuard() {
@@ -3715,7 +3779,8 @@ var STORE_ORDER = [
     document.documentElement.style.setProperty('--hdr', $('#hdr').offsetHeight + 'px');
     if (window.ResizeObserver) new ResizeObserver(function () { var hh = $('#hdr').offsetHeight + 'px'; if (document.documentElement.style.getPropertyValue('--hdr') !== hh) { document.documentElement.style.setProperty('--hdr', hh); fhSchedule(); } }).observe($('#hdr'));
     bind();
-    AUTH.start(onReady, { gate: showGate, busy: showBusy });
+    beeMenu();
+    AUTH.start(onReady, { gate: showGate, busy: showBusy, retry: showRetry, netText: netText });
   });
   window.STATUS_APP = { anc: function () { return ANC; }, crumb: function () { return CRM ? CRM.segs.filter(function (x) { return !x.act; }).map(function (x) { return x.nm; }) : []; }, dovOpen: function () { return Object.keys(DOVO); }, go: go, back: back, fromBack: fromBack, from: function () { var f = S.from && FROMS[S.from]; return f ? f.nm : ''; }, place: placeName, guide: { open: openGuide, ready: function () { return !!GD.html; }, go: gdGo, here: function () { return GD.here; }, prof: function () { var t0 = performance.now(); GD.cache = ''; var c = gdPrepared(), t1 = performance.now(); return { prep: t1 - t0, bytes: c.length }; } }, histLen: function () { return HIST.length; }, drillTo: drillTo, state: S, fhUpdate: fhUpdate, openSec: function (id) { openSec(id); }, tree: function () { return TREE; }, w32: function () { return W32; }, me: function () { return ME; }, kept: function () { return Object.keys(DATA).filter(function (c) { return DATA[c] && DATA[c].tree; }).length; }, dict: function () { return DICT; }, busy: function () { return !!(TREE_P || W32_P) || PEND > 0; }, gliding: function () { return !!glStop; },   // busy＝店の木・3-2 の数を裏で受け取っている最中（試験が、届いた後の描き直しと押すのが重ならないように待つ）
     find: function (q) { var i = $('#q1'); i.value = q; search(i, $('#r1')); return $$('#r1 button[data-hit]').map(function (b) { return b.textContent; }); } };
