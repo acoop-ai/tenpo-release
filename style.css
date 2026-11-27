@@ -791,7 +791,7 @@ button.tmt:hover{border-color:var(--dac,var(--brand))}
 .tmx .grp.sub{font-size:12.5px;font-weight:800;color:#0b3a7e;background:#f3f6fa;padding:3px 8px;margin:6px 0 0;border-radius:5px}
 .tmx .dopen{padding:4px 0 0;background:none;box-shadow:none;border:0}
 .tg{display:inline-block;background:#fef3c7;color:#92400e;border:1px solid #f59e0b;border-radius:6px;font-size:12px;font-weight:800;padding:0 6px;line-height:1.6;white-space:nowrap}
-.thin{display:flex;align-items:center;gap:8px;min-height:56px}
+.thin{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;min-height:56px}   /* s1127b: 細い札（幅 375 の中の段の札）では、曜日の形を「数が少ない」の下へ（前は札の外へはみ出し、ページが横に 47px 送れた） */
 .shp{display:inline-flex;align-items:flex-end;gap:4px;padding:2px 0}
 .shp .sc{display:flex;flex-direction:column;align-items:center;gap:1px}
 .shp .sc i{display:block;width:14px;background:#7aa7e3;border-radius:2px 2px 0 0}
@@ -1224,4 +1224,4 @@ body.beedemo{overflow:hidden}
 @media (max-width:900px){.bee-demo-bar .bd-keys{display:none}.bee-demo-bar .bd-lead{flex-basis:100%;order:3}}
 @media (max-width:760px){.bee-demo-cap{padding:8px 10px}.bee-demo-cap .bd-name{font-size:19px}.bee-demo-cap .bd-when{font-size:15.5px}.bee-demo-cap .bd-long{display:none}.bee-demo-cap .bd-autobox{margin-left:0}}
 
-:root{--css-build:"status-web-2026-11-27a"}
+:root{--css-build:"status-web-2026-11-27b"}

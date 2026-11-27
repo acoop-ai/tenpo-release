@@ -74,9 +74,10 @@ var STORE_ORDER = [
   // an＝見る分析（2026-11-15 PO: 店の最初の画面は2つの分析の中身から。札で選び、部門 → 中分類 → クラスへ同じ分析のまま掘る）。wl＝雨の強さ（0＝雨 10mm〜・1＝強い雨 30mm〜）
   // open＝掘り下げで、その場で開いた行（PO 11/16「部門を選ぶと別画面に飛ばされて、今どこにいるかわからなくなる」→ 押した行のすぐ下に中を開く）。段（path）が替われば閉じる
   // mo＝本部の地図の店の比較で開いた行（店のコード、または「店のコード:分類の番号」＝店 → 部門 → 中分類 → クラスをその場で・11/17d）。mmo＝今月の型の掘り下げで開いた行。eo＝催事の掘り下げで開いた行（催事|部門|区分）。dept＝部門ごとの POS の部門の名前
-  var S = { view: 'home', path: ['S'], m: 'a', an: 'yo', wl: 0, from: 0, open: [], wo: [], wm: 0, mo: [], yo: [], mmo: [], eo: [], mdp: (function () { try { return localStorage.getItem('storeops_mdp_v1') || ''; } catch (e) { return ''; } })(), mar: (function () { try { return localStorage.getItem('storeops_mar_v1') || ''; } catch (e) { return ''; } })(), mts: 0 };   // mar＝本部の地図の見る範囲のエリア（空＝全社・この端末に覚える・s1118a）。mts＝小さな立体の目盛り（0＝どの行も同じ・1＝行ごと）。mdp＝本部の地図の見る範囲（部門のコード・空＝全社）。この端末に覚える
+  //   dmo＝部門ごとの「店ごとの違い」で開いた行（s1127b・前は mo を全店のいまと分け合っていて、部門ごとで開いた店が全店のいまの「いま見ている所」に紛れ込んでいた）
+  var S = { view: 'home', path: ['S'], m: 'a', an: 'yo', wl: 0, from: 0, open: [], wo: [], wm: 0, mo: [], dmo: [], yo: [], mmo: [], eo: [], mdp: (function () { try { return localStorage.getItem('storeops_mdp_v1') || ''; } catch (e) { return ''; } })(), mar: (function () { try { return localStorage.getItem('storeops_mar_v1') || ''; } catch (e) { return ''; } })(), mts: 0 };   // mar＝本部の地図の見る範囲のエリア（空＝全社・この端末に覚える・s1118a）。mts＝小さな立体の目盛り（0＝どの行も同じ・1＝行ごと）。mdp＝本部の地図の見る範囲（部門のコード・空＝全社）。この端末に覚える
   var HIST = [];
-  function snap() { return JSON.stringify({ view: S.view, path: S.path, m: S.m, an: S.an, wl: S.wl, open: S.open, wo: S.wo, wm: S.wm, mo: S.mo, yo: S.yo, mmo: S.mmo, eo: S.eo, month: S.month, ev: S.ev, dept: S.dept, mdp: S.mdp, mar: S.mar, mts: S.mts, from: S.from || 0, c: CUR, y: window.scrollY }); }
+  function snap() { return JSON.stringify({ view: S.view, path: S.path, m: S.m, an: S.an, wl: S.wl, open: S.open, wo: S.wo, wm: S.wm, mo: S.mo, dmo: S.dmo, yo: S.yo, mmo: S.mmo, eo: S.eo, month: S.month, ev: S.ev, dept: S.dept, mdp: S.mdp, mar: S.mar, mts: S.mts, from: S.from || 0, c: CUR, y: window.scrollY }); }
   // ── 来た所（11/17e PO 問3 A・T2）: 中の釦（大きく開く・〇〇を見る・催事ごとで大きく見る など）で上の帯のタブが替わったら、その下の帯の左に「← 〇〇に戻る」。
   //   S.from＝来た所の番号（FROMS の鍵）。来た所の見方（snap）を覚え、押すとそこへ（位置も）。上の帯のタブ・利用ガイドの「この画面へ」で移ったら消す。「← ひとつ前に戻る」は覚えた見方ごと戻すので、札も元どおり
   var FROMS = {}, FROM_N = 0, NAV0 = null, LAST = { ev: '', dept: '' };
@@ -460,17 +461,53 @@ var STORE_ORDER = [
   function mapStoreOf(code) { var M = ME && ME.map, f = null; if (M) M.areas.forEach(function (a) { a.stores.forEach(function (s) { if (String(s.c) === String(code)) f = s; }); }); return f; }
   function treeOf(code) { var d = DATA[code]; return d && d.tree ? d.tree : null; }
   function nodeNmOf(code, id) { var T = treeOf(code); if (T && T.N[id]) return T.N[id].n; var M = ME && ME.map, z = M ? mapDl(M).filter(function (x) { return x.id === id; })[0] : null; return z ? z.n : id; }
-  /** 本部の地図で、いま開いている（選んでいる）立体: S.mo の最後に開いた店（か、エリアの部門）と、そこまでの段。無ければ null */
+  // ── 全店のいまの「いま見ている所」（s1127b・PO 11/26「いじっていたら全社に戻してもパンくずリストが戻らないバグ発生」）:
+  //   見る範囲（エリア S.mar・部門 S.mdp）と、その中で開いた立体（S.mo＝店 → 部門 → 中分類 → クラス）の1組。前は、チップは範囲だけを替え、帯（パンくず）・AI のコメント・次の一手は
+  //   開いた立体だけを読んでいた＝範囲を全社・全部門に戻しても、帯と AI のコメントが前の店・部門のまま（同じチップをもう一度押しても何も起きなかった）。
+  //   いまは: ①範囲を替える道は scopeGo だけ（替えたら、開いていた立体は外す）②帯・札と AI のコメントの見出し・次の一手・比べる図は、どれも mapRange から描く
+  //   ③開いた立体は範囲の中の物だけ（範囲の外の店は「いま見ている所」にしない）。札（分析）・見る数は範囲と別（替えても開いた立体はそのまま）
+  function mapRange() {
+    var M = ME && ME.map; if (!M) return null;
+    var ar = mapAr(M), d = mapDep(M), dn = d ? (mapDl(M).filter(function (x) { return x.id === d; })[0] || {}).n || '' : '';
+    return { M: M, ar: ar, d: d, dn: dn, nm: [ar, dn].filter(Boolean).join('・'), f: mapFocus() };
+  }
+  /** 見る範囲（エリア・部門）を選ぶ＝その範囲の全体へ移る（チップ・s1127b）。開いていた立体（店・部門）は外す（同じチップをもう一度押しても外す＝「全社に戻す」で帯も「全店のいま」に）。
+   *  替える前の範囲と開いていた所は履歴に積む（← ひとつ前に戻るで、範囲と帯が一緒に戻る）。札（分析）・見る数はそのまま。何も替わらないときは何もしない（履歴を積まない） */
+  function scopeGo(o) {
+    var ch = { mo: [] }, same = !(S.mo || []).length;
+    ['mar', 'mdp'].forEach(function (k) { if (k in o) { ch[k] = String(o[k] || ''); if (ch[k] !== (S[k] || '')) same = false; } });
+    if (same) return;
+    go(ch, { keep: true });
+  }
+  /** この端末に覚える見る範囲（書くのはここだけ・全店のいまを描くたび）＝いま画面に出ている範囲（← ひとつ前に戻るで戻した範囲も・地図に無い範囲は全社／全部門として） */
+  function scopeKeep(ar, d) {
+    try {
+      if ((localStorage.getItem('storeops_mar_v1') || '') !== ar) localStorage.setItem('storeops_mar_v1', ar);
+      if ((localStorage.getItem('storeops_mdp_v1') || '') !== d) localStorage.setItem('storeops_mdp_v1', d);
+    } catch (e) { /* 覚えられない端末: 画面の範囲はそのまま */ }
+  }
+  /** 開いた立体の名前（AI のコメントの見出し・次の一手）。部門を選んだ範囲では、店の札＝その店のその部門なので、店のすぐ後ろに部門の名前（例: 〇〇店・惣菜） */
+  function focusWho(f) { var a = f.chain.map(function (c) { return c.nm; }); if (f.dn) a.splice(1, 0, f.dn); return a.join('・'); }
+  /** 次の一手＝開いた立体を、店のいまで大きく開く（その店の、その段〈部門を選んだ範囲では、その部門〉へ） */
+  function focusNx(f) {
+    if (!f || f.area) return '';
+    var last = f.chain[f.chain.length - 1], dep = last.id || f.sd || '';
+    return '<div class="nx"><b>次の一手</b>: <button type="button" data-store="' + esc(f.code) + '"' + (dep ? ' data-sdep="' + esc(dep) + '"' : '') + '>' + esc(focusWho(f) + 'を大きく開いて、AI のコメントとこの段の図を見る') + ' ▸</button></div>';
+  }
+  /** 本部の地図で、いま開いている（選んでいる）立体: S.mo の最後に開いた店（か、エリアの部門）と、そこまでの段。無ければ null。
+   *  見る範囲の外の物は返さない（エリアを選んでいれば、そのエリアの店だけ・部門を選んでいればエリアの部門〈全部門のときだけ開ける〉は無い） */
   function mapFocus() {
     var M = ME && ME.map; if (!M || CUR || !(S.view === 'home' || S.view === 'status')) return null;
     var mo = (S.mo || []).map(String), last = mo[mo.length - 1]; if (!last) return null;
+    var ar = mapAr(M), d = mapDep(M);
     if (last.indexOf('A:') === 0) {   // エリアの部門（1店あたり）
+      if (d) return null;
       var p = last.split(':'), an = p[1], dep = p.slice(2).join(':'), A = M.areas.filter(function (a) { return a.nm === an; })[0]; if (!A) return null;
       var ch = [{ key: 'A:' + an, nm: an + '（1店あたり）' }];
       if (dep) ch.push({ key: last, id: dep, nm: nodeNmOf('', dep) });
       return { area: an, A: A, chain: ch };
     }
-    var code = last.split(':')[0], s = mapStoreOf(code); if (!s) return null;
+    var code = last.split(':')[0], s = mapStoreOf(code); if (!s || (ar && s.ar !== ar)) return null;
     var keys = mo.filter(function (k) { return k === code || k.indexOf(code + ':') === 0; }), lk = keys[keys.length - 1], ch2 = [{ key: code, nm: s.nm }];
     if (lk !== code) {
       var id = lk.slice(code.length + 1), T = treeOf(code), ids = [];
@@ -478,7 +515,8 @@ var STORE_ORDER = [
       else ids = [id];
       ids.forEach(function (i2) { if (keys.indexOf(code + ':' + i2) >= 0) ch2.push({ key: code + ':' + i2, id: i2, nm: nodeNmOf(code, i2) }); });
     }
-    return { code: code, s: s, chain: ch2 };
+    var x = d ? s.dp && s.dp[d] : null, dn = d ? (mapDl(M).filter(function (z) { return z.id === d; })[0] || {}).n || '' : '';
+    return { code: code, s: s, chain: ch2, dn: dn, sd: d ? (x && x.same) || d : '' };   // dn・sd＝部門を選んだ範囲の部門の名前と、その店で開く部門（ベーカリーの無い店は元の部門）
   }
   /** 帯の段（名前・押した先・▾ の種類） */
   function crumbModel() {
@@ -486,8 +524,8 @@ var STORE_ORDER = [
     var hq = ME.role === 'hq' || ME.role === 'admin', segs = [];
     if (!CUR) {
       if (!hq) return null;
-      segs.push({ nm: '全店のいま', go: 'map' });
-      var f = mapFocus();
+      var R = mapRange(), f = R ? R.f : null;
+      segs.push({ nm: '全店のいま' + (R && R.nm ? '（' + R.nm + '）' : ''), go: 'map' });   // s1127b: 見る範囲を選んでいれば、その範囲（チップと同じ字）。押すと、その範囲の全体へ（開いた立体は外す）
       if (f) f.chain.forEach(function (c, i) { segs.push({ nm: c.nm, go: 'mf:' + i, dd: f.area ? (i ? 'anode' : '') : (i ? 'mnode' : 'mstore'), ci: i }); });
       else segs.push({ nm: '店を選ぶ', go: '', dd: 'mpick', ci: 0, act: true });   // s1125a の検査「帯から店を選べるのは、店を開いたあとだけ」: 何も開いていないときも、帯の ▾ で店を開ける（その店の札のすぐ下に開いて、そこへ送る）
       return { segs: segs, f: f, map: true };
@@ -590,12 +628,11 @@ var STORE_ORDER = [
     if (kind === 'store') crumbStore(v); else if (kind === 'mstore') mapSwap(v); else if (kind === 'mpick') mapOpen(v); else if (kind === 'node') nodeSwap(sg.ci, v); else mapNodeSwap(sg.ci, v);
     ANC0 = null;   // 使われなかった時（店の木を待つ・同じ物を選んだ）は捨てる
   }
-  /** 帯の名前を押した: その段へ（全店のいま・店・部門…）。本部の地図の中では、開いている立体のその段へ（下の段を閉じて、そこまで送る） */
+  /** 帯・左のサイド・題の横の「全店のいま」（data-view="home-map"）: 全店のいまの、いまの見る範囲の全体へ・いちばん上から。開いていた立体は外す（s1127b: 前は外さず、
+   *  押しても帯が「全店のいま › 〇〇店 › 惣菜」のままだった）。替える前の見方は履歴に積む（← ひとつ前に戻るで、開いていた所へ） */
+  function mapRoot() { pushHist(); useStore(''); S.view = 'home'; S.path = ['S']; S.open = []; S.mo = []; render({ top: true }); }
+  /** 帯の名前を押した: その段へ（店・部門…）。本部の地図の中では、開いている立体のその段へ（下の段を閉じて、そこまで送る）。「全店のいま」は mapRoot */
   function crumbGo(g) {
-    if (g === 'map') {
-      if (!CUR && (S.view === 'home' || S.view === 'status')) { pushHist('scroll'); setBack(); glide(0); return; }
-      pushHist(); useStore(''); S.view = 'home'; S.path = ['S']; S.open = []; render({ top: true }); return;
-    }
     var p = String(g).split(':'), i = +p[1];
     if (p[0] === 'cr') { go({ view: 'status', path: S.path.slice(0, i + 1) }, { land: true }); return; }
     var f = CRM && CRM.f; if (p[0] !== 'mf' || !f || !f.chain[i]) return;
@@ -939,8 +976,9 @@ var STORE_ORDER = [
   function viewMap() {
     var M = ME.map, m = S.m;
     if (!M) return '<h1 class="vt" id="lvtop">全店のいま<small>' + esc(roleLabel()) + '</small></h1><div class="box"><p style="margin:0">' + esc(String(ME.note || '全店の数は、いま準備中です。').replace('全体の地図', '全店の数')) + '</p></div>' + (ME.role === 'admin' ? '<div class="nx"><button type="button" data-view="admin">更新の状態を見る ▸</button></div>' : '');
-    var d = mapDep(M), dn = d ? (mapDl(M).filter(function (x) { return x.id === d; })[0] || {}).n || '' : '', lvn = { lv: d ? 1 : 0 }, an = S.an;
-    var arn = mapAr(M), SC = mapScope(M, arn), scopeNm = [arn, dn].filter(Boolean).join('・');   // 見る範囲＝エリア × 部門（s1118a）
+    var R = mapRange(), d = R.d, dn = R.dn, lvn = { lv: d ? 1 : 0 }, an = S.an;   // s1127b: いま見ている所（範囲と開いた立体）は mapRange の1か所から
+    var arn = R.ar, SC = mapScope(M, arn), scopeNm = R.nm;   // 見る範囲＝エリア × 部門（s1118a）
+    scopeKeep(arn, d);
     var mn = function (k) { return mname(k, lvn); };
     var all = []; M.areas.forEach(function (a) { a.stores.forEach(function (s) { all.push(s); }); });
     var stores = arn ? all.filter(function (s) { return s.ar === arn; }) : all;   // 札・AI のコメント・店の比較・店の札・一覧の表は、見る範囲のエリアの店
@@ -962,10 +1000,12 @@ var STORE_ORDER = [
     var aiF = function () {
       var fo = an === 'tm' && tmHas(M) ? tmFocusText(M, d, m) : null;
       if (fo) return aiHtml(fo.hd, fo.r, fo.y, fo.s) + (fo.nx || '');
-      var t = mapText(M, d, dn, m, mn, stores, rows, arn, SC), o = '';
+      var t = mapText(M, d, dn, m, mn, stores, rows, arn, SC), o = '', f = mapFocus();
       if (!t) return '';
-      o += '<div class="ai"><div class="hd">AI のコメント（' + esc(AN[an]) + (scopeNm ? '・' + esc(scopeNm) : '') + '）</div><dl><dt>結果</dt><dd>' + esc(t.r) + '</dd><dt>なぜ</dt><dd>' + esc(t.y) + '</dd><dt>すること</dt><dd>' + esc(t.s) + '</dd></dl></div>';
-      if (t.w) { var wx2 = t.w.x, sd = d ? (wx2 && wx2.same) || d : ''; o += '<div class="nx"><b>次の一手</b>: <button type="button" data-store="' + esc(t.w.s.c) + '"' + (sd ? ' data-sdep="' + esc(sd) + '"' : '') + '>' + esc(t.w.s.nm + (dn ? 'の' + dn : '') + 'を開いて、' + AN[an] + 'を' + (dn ? '中分類' : '部門') + 'ごとに見る') + ' ▸</button></div>'; }
+      // s1127b: 立体（店の行）を開いていても、この分析のコメントは見る範囲の文＝見出しに範囲の名前（全社も）を出し、次の一手は開いた所を大きく開く（帯の「いま見ている所」と食い違わない）
+      o += '<div class="ai"><div class="hd">AI のコメント（' + esc(AN[an]) + (scopeNm ? '・' + esc(scopeNm) : f ? '・全社' : '') + '）</div><dl><dt>結果</dt><dd>' + esc(t.r) + '</dd><dt>なぜ</dt><dd>' + esc(t.y) + '</dd><dt>すること</dt><dd>' + esc(t.s) + '</dd></dl></div>';
+      if (f && !f.area) o += focusNx(f);
+      else if (t.w) { var wx2 = t.w.x, sd = d ? (wx2 && wx2.same) || d : ''; o += '<div class="nx"><b>次の一手</b>: <button type="button" data-store="' + esc(t.w.s.c) + '"' + (sd ? ' data-sdep="' + esc(sd) + '"' : '') + '>' + esc(t.w.s.nm + (dn ? 'の' + dn : '') + 'を開いて、' + AN[an] + 'を' + (dn ? '中分類' : '部門') + 'ごとに見る') + ' ▸</button></div>'; }
       return o;
     };
     var ai1 = aiF(), ai0 = ai1 ? blk('blk-mai', function () { if (ai1 !== null) { var x = ai1; ai1 = null; return x; } return aiF(); }) : '';
@@ -1090,7 +1130,7 @@ var STORE_ORDER = [
     // 店の行のすぐ下に開く、その店の部門（PO 11/17「この画面で直ぐにできないと不便」・地図の数＝往復 0）。
     // 11/17d: 部門 → 中分類 → 小分類 → クラスも、その場で（PO「天気以外の時もドリルダウンでクラスまで」）。店の行を開いた時点で、その店の木を裏で受け取り始める（往復1本）。
     //   部門の数は地図の数・中分類より下は店の木の数（同じ分析・同じ目盛り）。木が届く前は待ちの印、届いたらこの塊だけを描き直す
-    var O = {}; (S.mo || []).forEach(function (k) { O[k] = 1; });
+    var MO = S[moName()] || [], O = {}; MO.forEach(function (k) { O[k] = 1; });   // s1127b: 部門ごとの店ごとの違いは dmo（全店のいまの mo と分ける）
     var subRow = function (name, v, attrs, extra, style, ar) {
       var el = attrs ? 'button type="button"' : 'div';
       return '<' + el + ' class="drow mrow sub' + (attrs ? '' : ' leaf') + extra + '" style="' + style + '"' + (attrs || '') + '><span class="n"><span class="ar">' + ar + '</span><span>' + name + '</span></span>' + cells(v) + '</' + (attrs ? 'button' : 'div') + '>';
@@ -1149,7 +1189,7 @@ var STORE_ORDER = [
       // 店は正の店の並び（地図の並び＝store_order.csv の順。PO 11/18「店舗の順番が規定通りになってない」）。値で並べ替えない・数の無い店も、その位置に「—」で置く。比べない店も、その位置に印つき
       var rs = rows.filter(function (r) { return a.stores.indexOf(r.s) >= 0; }).sort(function (p, q) { return ordOf(p.s.c) - ordOf(q.s.c); });
       rs.forEach(function (r) {
-        var sd = d && r.x ? r.x.same || d : '', op = (!d || (inPlace && r.x)) && (S.mo || []).indexOf(String(r.s.c)) >= 0;
+        var sd = d && r.x ? r.x.same || d : '', op = (!d || (inPlace && r.x)) && MO.indexOf(String(r.s.c)) >= 0;
         var nm = esc(r.s.nm) + (r.s.nc ? ' <small class="nctag">比べない</small>' : '') + (r.x && r.x.same ? ' <small>（' + esc((mapDl(M).filter(function (z) { return z.id === r.x.same; })[0] || {}).n || '') + 'と同じ）</small>' : '');
         if (d && inPlace && r.x) a2 += rowHtml(nm, '', r.v, ' data-mtog="' + esc(r.s.c) + '" data-sdep="' + esc(sd) + '" aria-expanded="' + op + '" title="押すと、すぐ下に' + esc(r.s.nm) + 'の' + esc(dn) + 'の中分類が開きます（もう一度押すと閉じる）"', (r.v ? '' : ' nodp') + (op ? ' open' : ''), op ? '▼' : '▶') + (op ? kidsOfDep(r.s, r.x) : '');
         else if (d) a2 += rowHtml(nm, '', r.v, r.x || !inPlace ? ' data-store="' + esc(r.s.c) + '"' + (sd ? ' data-sdep="' + esc(sd) + '"' : '') + ' title="押すと、' + esc(r.s.nm) + 'の' + esc(dn) + 'の' + esc(AN[an]) + 'が開きます"' : '', r.v ? '' : ' nodp');
@@ -1255,9 +1295,9 @@ var STORE_ORDER = [
   }
   /** 札の行のすぐ下に開く中（行いっぱい）: 大きな立体（数の少ない分類は曜日の形と一言）→ 下の段の札（まとまりごとに並べ、同じ目盛り） */
   function tmOpen(nd, ctx, O, st, thin) {
-    var u = tmU(ctx.k), key = 'tm:' + nd.key, o = '<div class="tmx" data-for="' + esc(nd.key) + '"' + (nd.sty ? ' style="' + nd.sty + '"' : '') + '><div class="tmxh">▼ ' + esc(nd.nm) + ' — ' + esc(tmNm(ctx.k, ctx.lv)) + 'の曜日 × 時刻（1日あたり・' + u + '）</div>';
+    var u = tmU(ctx.k), key = 'tm:' + nd.key, o = '<div class="tmx" data-for="' + esc(nd.key) + '"' + (nd.sty ? ' style="' + nd.sty + '"' : '') + '><div class="tmxh">▼ ' + esc(nd.who || nd.nm) + ' — ' + esc(tmNm(ctx.k, ctx.lv)) + 'の曜日 × 時刻（1日あたり・' + u + '）</div>';
     if (nd.H && st && !thin) {
-      C3R[key] = { H: nd.H, hrs: ctx.hrs, u: u, nm: tmNm(ctx.k, ctx.lv), who: nd.nm, A: nd.A, C: nd.CC, nd: nd.ND, mul: nd.MUL, q: nd.QZ, per: nd.PER, unm: ctx.lv >= 1 ? '1人あたり売上' : '客単価', cnm: ctx.lv >= 1 ? '買った人の数' : '来客数' };   // s1124a: 立体のすぐ下に客単価の折れ線
+      C3R[key] = { H: nd.H, hrs: ctx.hrs, u: u, nm: tmNm(ctx.k, ctx.lv), who: nd.who || nd.nm, A: nd.A, C: nd.CC, nd: nd.ND, mul: nd.MUL, q: nd.QZ, per: nd.PER, unm: ctx.lv >= 1 ? '1人あたり売上' : '客単価', cnm: ctx.lv >= 1 ? '買った人の数' : '来客数' };   // s1124a: 立体のすぐ下に客単価の折れ線
       if (nd.X) { C3R[key].X = nd.X; C3R[key].XQ = nd.XQ; C3R[key].xnm = xNm(ctx.k, ctx.lv); }   // s1124b: うち値引き（単価のときは nd.X が無い）
       o += S.m === 'u' && upMat(C3R[key]) ? upLead(C3R[key]) + '<div class="c3s" data-c3="' + esc(key) + '">' + c3Body(C3R[key], 'u', key) + '</div>' + c3Cap(C3R[key]) + '<div class="c3s" data-c3="' + esc(key) + '">' + c3Body(C3R[key], 'v', key) + '</div>'
         : c3Lead(C3R[key]) + (C3R[key].X ? c3Legend(C3R[key]) : '') + '<div class="c3s" data-c3="' + esc(key) + '">' + c3Body(C3R[key], '', key) + '</div>';
@@ -1317,10 +1357,11 @@ var STORE_ORDER = [
     if (dd.err) return '<div class="hint">この店の中の数を受け取れませんでした（' + esc(dd.err) + '）。札を閉じて開き直すと、もう一度受け取ります。</div>';
     return '<div class="hint wait"><span class="spin" aria-hidden="true"></span>この店の中（中分類 → クラス）の数を受け取っています…（届いたら、ここに開きます）</div>';
   }
-  /** 店の札（全社か部門）。部門を選んでいるときは、その店のその部門 → 中分類 → … */
+  /** 店の札（全社か部門）。部門を選んでいるときは、その店のその部門 → 中分類 → …
+   *  who＝開いた大きな立体の見出し・重ねた図の名前（s1127b: 部門を選んでいるときは「〇〇店・惣菜」＝帯・AI のコメントの見出しとそろえる。札の名前は店だけのまま＝並びの見出しに部門がある） */
   function tmStoreNd(M, s, d, dn, k) {
     var hm = hmOf(s, d), H = hmMat(hm, k), x = d ? s.dp && s.dp[d] : null, sd = d ? (x && x.same) || d : '';
-    var nd = { key: String(s.c), nm: s.nm, tag: (s.nc ? ' <small class="nctag">比べない</small>' : '') + (x && x.same ? ' <small>（' + esc((mapDl(M).filter(function (z) { return z.id === x.same; })[0] || {}).n || '') + 'と同じ）</small>' : ''), H: H, Q: hmMat(hm, 'q'), D: 8, A: hmMat(hm, 'a'), CC: hmMat(hm, 'c'), X: S.m === 'u' || !xMapOk(M) ? null : hmMat(hm, 'x' + k), XQ: hmMat(hm, 'xq'), QZ: 0.1, nc: !!s.nc, kidNm: d ? '中分類' : '部門',
+    var nd = { key: String(s.c), nm: s.nm, who: dn ? s.nm + '・' + dn : '', tag: (s.nc ? ' <small class="nctag">比べない</small>' : '') + (x && x.same ? ' <small>（' + esc((mapDl(M).filter(function (z) { return z.id === x.same; })[0] || {}).n || '') + 'と同じ）</small>' : ''), H: H, Q: hmMat(hm, 'q'), D: 8, A: hmMat(hm, 'a'), CC: hmMat(hm, 'c'), X: S.m === 'u' || !xMapOk(M) ? null : hmMat(hm, 'x' + k), XQ: hmMat(hm, 'xq'), QZ: 0.1, nc: !!s.nc, kidNm: d ? '中分類' : '部門',
       big: '<button type="button" data-store="' + esc(s.c) + '"' + (sd ? ' data-sdep="' + esc(sd) + '"' : '') + '>' + esc(s.nm + (dn ? 'の' + dn : '')) + 'を大きく開く（AI のコメント・この段の図）▸</button>' };
     if (!H) return nd;
     nd.kids = function () {
@@ -1419,9 +1460,9 @@ var STORE_ORDER = [
   function tmFocusText(M, d, m) {
     var f = mapFocus(); if (!f || (f.area && f.chain.length < 2)) return null;
     var last = f.chain[f.chain.length - 1], r = TMN[last.key]; if (!r) return null;
-    var nd = r.nd, ctx = r.ctx, lv = ctx.lv, who = f.chain.map(function (c) { return c.nm; }).join('・'), u = tmU(ctx.k), mnm = m === 'u' ? (lv >= 1 ? '1人あたり売上' : '客単価') : tmNm(ctx.k, lv);
+    var nd = r.nd, ctx = r.ctx, lv = ctx.lv, who = focusWho(f), u = tmU(ctx.k), mnm = m === 'u' ? (lv >= 1 ? '1人あたり売上' : '客単価') : tmNm(ctx.k, lv);   // s1127b: 部門を選んだ範囲では「〇〇店・惣菜」（前は「〇〇店」だけで、数は惣菜なのに見出しに部門が無かった）
     var hd = 'AI のコメント（' + who + '・' + mnm + '・曜日×時刻）', y = '曜日と時刻の形は、まわりの様子（住宅地・道路沿い・農村）と、来るお客様の暮らし方・品ぞろえで変わる。どれが効いているかは、記録だけでは見分けられない。祝日・行事の日は別に考える。';
-    var dep = f.area ? '' : (last.id || ''), nx = f.area ? '' : '<div class="nx"><b>次の一手</b>: <button type="button" data-store="' + esc(f.code) + '"' + (dep ? ' data-sdep="' + esc(dep) + '"' : '') + '>' + esc(who + 'を大きく開いて、AI のコメントとこの段の図を見る') + ' ▸</button></div>';
+    var nx = focusNx(f);   // 同: 部門を選んだ範囲で店だけを開いているときも、その店のその部門へ（前は部門が付かず、店全体が開いた）
     var kidT = nd.kids ? '形の違う' + (nd.kidNm || '下の段') + 'は、すぐ下の札で見る。' : '';
     if (!nd.H) return { hd: hd, r: who + 'には、' + mnm + 'の曜日 × 時刻の数がありません。', y: y, s: kidT || '上の段の立体で見る。', nx: nx };
     if (tmThin(nd.Q)) return { hd: hd, r: who + 'は、1時間に1点も売れない時刻が、開いている時刻の半分を超えます（数が少ない）。時刻の形は読めないので、曜日の形（1日の計）だけを見ます。', y: y, s: '時刻ごとの判断はしない。曜日ごとの量だけを、上の段の形と比べて見る。' + kidT, nx: nx };
@@ -1753,6 +1794,8 @@ var STORE_ORDER = [
   }
   /** 開いた行の並びから、1つの行とその中で開いていた行を外す（いま開いている店の木で、親をたどる） */
   function treeClose(list, id) { var all = N(); return list.filter(function (j) { if (j === id) return false; for (var x = all[j], g = 0; x && x.p && g++ < 8; x = all[x.p]) if (x.p === id) return false; return true; }); }
+  /** 店の比較で開いた行の入れ物の名前: 全店のいま＝mo（いま見ている所の一部）・部門ごとの店ごとの違い＝dmo（s1127b・画面ごとに分ける） */
+  function moName() { return S.view === 'dept' ? 'dmo' : 'mo'; }
   /** 本部の地図の店の比較: 店の行（コード）を閉じたら、その店の中の行を全部・部門より下の行（コード:番号）を閉じたら、その中で開いていた行を外す */
   function moClose(list, key) {
     var p = String(key).split(':'), code = p[0], id = p[1], T = DATA[code] && DATA[code].tree;
@@ -3394,7 +3437,7 @@ var STORE_ORDER = [
   var KEPT = [], KEEP_MAX = 3;
   function keepTree(code) {
     KEPT = KEPT.filter(function (c) { return c !== code; }).concat([code]);
-    var open = {}; (S.mo || []).forEach(function (k) { open[String(k).split(':')[0]] = 1; });
+    var open = {}; (S.mo || []).concat(S.dmo || []).forEach(function (k) { open[String(k).split(':')[0]] = 1; });
     for (var i = 0; KEPT.length > KEEP_MAX && i < KEPT.length;) {
       var old = KEPT[i]; if (old === CUR || old === code || open[old]) { i++; continue; }
       KEPT.splice(i, 1); if (DATA[old] && DATA[old].tree) DATA[old] = { sum: DATA[old].sum === DATA[old].tree ? null : DATA[old].sum };
@@ -3429,7 +3472,8 @@ var STORE_ORDER = [
       return;
     }
     if (r && r.auth) { onFail(r); return; }
-    if ((((S.view === 'home' || S.view === 'status') && !CUR) || S.view === 'dept') && (S.mo || []).indexOf(String(code)) >= 0 && (S.an !== 'tm' || (S.mo || []).some(function (k) { return String(k).indexOf(code + ':') === 0; }) || S.mdp)) { if (!redraw('blk-mcmp')) render({ keep: true }); else { maiRedraw(); pbar(); } }   // 曜日・時間帯で店の札だけを開いているときは、部門の札が地図の数なので描き直さない   // 部門ごとの「店ごとの違い」で開いた店も（s1118a）   // 本部の地図で開いている店: 店の比較の塊だけを描き直す
+    var ML = S[moName()] || [];   // s1127b: 部門ごとの店ごとの違いは dmo（部門ごとは店の行が いつも部門の中分類＝木が要る）
+    if ((((S.view === 'home' || S.view === 'status') && !CUR) || S.view === 'dept') && ML.indexOf(String(code)) >= 0 && (S.view === 'dept' || S.an !== 'tm' || ML.some(function (k) { return String(k).indexOf(code + ':') === 0; }) || S.mdp)) { if (!redraw('blk-mcmp')) render({ keep: true }); else { maiRedraw(); pbar(); } }   // 曜日・時間帯で店の札だけを開いているときは、部門の札が地図の数なので描き直さない   // 部門ごとの「店ごとの違い」で開いた店も（s1118a）   // 本部の地図で開いている店: 店の比較の塊だけを描き直す
   }
   function ensureTree() {
     if (TREE || TREE_P || !ME || !CUR) return TREE_P;
@@ -3607,13 +3651,13 @@ var STORE_ORDER = [
       if (ds.lens) {   // 左のサイドの画面の木＝タブ（来た所の札は消す）。本文の中の「〇〇を開く」は、来た所の札を出す
         var inSide = !!b.closest('#side'); if (inSide && narrowNav()) sideOpen(false);
         if (ds.lens === 'guide') { openGuide(); return; }
-        if (ds.lens === 'home') go({ view: 'home', path: ['S'] }, { top: true, nav: inSide ? 'tab' : '' }); else go(ds.lens === 'dept' ? { view: 'dept', mo: [] } : { view: ds.lens }, { top: true, nav: inSide ? 'tab' : '' }); return;   // 部門ごとの「店ごとの違い」は、閉じた形から（全店のいまで開いた店の行を持ち込まない＝開いたとたんに店の木を受け取らない）
+        if (ds.lens === 'home') go({ view: 'home', path: ['S'] }, { top: true, nav: inSide ? 'tab' : '' }); else go(ds.lens === 'dept' ? { view: 'dept', dmo: [] } : { view: ds.lens }, { top: true, nav: inSide ? 'tab' : '' }); return;   // 部門ごとの「店ごとの違い」は、閉じた形から（全店のいまで開いた店の行を持ち込まない＝開いたとたんに店の木を受け取らない）
       }
-      if (ds.view === 'home-map') { if (narrowNav()) sideOpen(false); pushHist(); useStore(''); S.view = 'home'; S.path = ['S']; S.open = []; render({ top: true }); return; }
+      if (ds.view === 'home-map') { if (narrowNav()) sideOpen(false); mapRoot(); return; }
       if (ds.view) { go({ view: ds.view }, { top: true }); return; }
       if (ds.store) { pickStore(ds.store, ds.sdep); return; }   // 本部の地図の店の札（部門を選んでいれば、その店のその部門へ）
-      if (ds.mdp != null) { try { localStorage.setItem('storeops_mdp_v1', ds.mdp); } catch (e2) {} if (ds.mdp !== S.mdp) go({ mdp: ds.mdp }, { keep: true }); return; }   // 本部の地図の見る範囲（全社／部門）
-      if (ds.mar != null) { try { localStorage.setItem('storeops_mar_v1', ds.mar); } catch (e3) {} if (ds.mar !== S.mar) go({ mar: ds.mar }, { keep: true }); return; }   // 本部の地図の見る範囲（全社／エリア・s1118a）
+      if (ds.mdp != null) { scopeGo({ mdp: ds.mdp }); return; }   // 本部の地図の見る範囲（全部門／部門）: その範囲の全体へ（開いていた立体は外す・s1127b）
+      if (ds.mar != null) { scopeGo({ mar: ds.mar }); return; }   // 同（全社／エリア・s1118a）
       if (ds.mts != null) { if (+ds.mts !== S.mts) go({ mts: +ds.mts }, { keep: true, part: 'blk-mcmp' }); return; }   // 店の比較の小さな立体の目盛り（どの店も同じ／店ごと）: 店の比較の塊だけ
       if (ds.anhome) { go({ view: 'status', path: ['S'], an: ds.anhome }, { top: true }); return; }   // 天気と売れ方 → 自店のステータスをその分析で
       if (ds.wxstore) { pushHist(); useStore(ds.wxstore); S.view = 'status'; S.path = ['S']; S.open = []; S.an = 'wx'; render({ top: true }); ensureTree(); return; }   // 本部: 店ごとの雨の効き → その店を雨の日の効きで
@@ -3625,7 +3669,7 @@ var STORE_ORDER = [
       if (ds.wm != null) { go({ wm: +ds.wm }, { keep: true, part: S.view === 'wx' && W32 ? 'blk-w32' : '' }); return; }   // 同: 売上／来客数
       if (ds.w32retry) { W32_ERR = ''; w32Load(); render({ keep: true }); return; }
       if (ds.yev) { var yo = (S.yo || []).slice(), yi = yo.indexOf(ds.yev); if (yi >= 0) yo.splice(yi, 1); else yo.push(ds.yev); go({ yo: yo }, { keep: true, part: 'blk-year' }); return; }   // 年間の流れの行: すぐ下に開く（往復 0）
-      if (ds.mtog) { var mk = ds.mtog, mo = S.mo || []; if (mo.indexOf(mk) >= 0) mo = moClose(mo, mk); else { mo = mo.concat([mk]); var dd0 = DATA[mk.split(':')[0]]; if (dd0 && dd0.err) dd0.err = ''; } if (b.classList.contains('tmt') && tmFast(b, mk, mo)) return; go({ mo: mo }, { keep: true, part: mk.indexOf('A:') === 0 ? '' : 'blk-mcmp', parts: ['blk-mai'] }); return; }   // 本部の地図の店の比較: 店 → 部門 → 中分類 → クラスを、すぐ下に（店の比較の塊だけを描き直す）
+      if (ds.mtog) { var mk = ds.mtog, mq = moName(), mo = S[mq] || [], mch = {}; if (mo.indexOf(mk) >= 0) mo = moClose(mo, mk); else { mo = mo.concat([mk]); var dd0 = DATA[mk.split(':')[0]]; if (dd0 && dd0.err) dd0.err = ''; } if (b.classList.contains('tmt') && tmFast(b, mk, mo)) return; mch[mq] = mo; go(mch, { keep: true, part: mk.indexOf('A:') === 0 ? '' : 'blk-mcmp', parts: ['blk-mai'] }); return; }   // 本部の地図の店の比較: 店 → 部門 → 中分類 → クラスを、すぐ下に（店の比較の塊だけを描き直す）
       if (ds.mmo) { var mm = S.mmo || []; go({ mmo: mm.indexOf(ds.mmo) >= 0 ? treeClose(mm, ds.mmo) : mm.concat([ds.mmo]) }, { keep: true, part: 'blk-mdig' }); return; }   // 今月の型の掘り下げ
       if (ds.eo) { var eo = S.eo || [], ek = ds.eo, pre = (ek.indexOf('D|') === 0 ? ek.slice(2) : ek) + '|'; go({ eo: eo.indexOf(ek) >= 0 ? eo.filter(function (k) { return k !== ek && k.indexOf(pre) !== 0; }) : eo.concat([ek]) }, { keep: true, part: { event: 'blk-edig', year: 'blk-year', dept: 'blk-dyear' }[S.view] || '' }); return; }   // 催事の掘り下げ（閉じるときは、その中で開いていた行も閉じる）
       if (ds.cgo != null) { crumbClose(); crumbGo(ds.cgo); return; }   // s1125a: いま見ている所の帯の名前 → その段へ
