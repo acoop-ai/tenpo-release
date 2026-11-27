@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-ZLNdaCs7Vyi5pvMAfA7XYWfb7+3gINzvaElHCf+RNFI=' 'sha256-dsOgWoexqLIeVT0a5RYN+mVaPBOqbkrcSfZyx7Z77Iw=' 'sha256-54WE49LzS4gphCxkVitSn2+X1nWPvFMZMPKn5LRC5bY='; style-src 'sha256-tWFIol0W8KDH32eHDjbTS7y9hmxpwsWBup3krOXkMLg='; media-src blob:; connect-src https://script.google.com https://script.googleusercontent.com; base-uri 'none'; object-src 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-ZLNdaCs7Vyi5pvMAfA7XYWfb7+3gINzvaElHCf+RNFI=' 'sha256-dsOgWoexqLIeVT0a5RYN+mVaPBOqbkrcSfZyx7Z77Iw=' 'sha256-3KgLCWgkNJ/YWh1ESN1vHC2Nzw8Xf2a+NrZyoyWFIHI='; style-src 'sha256-tWFIol0W8KDH32eHDjbTS7y9hmxpwsWBup3krOXkMLg='; media-src blob:; connect-src https://script.google.com https://script.googleusercontent.com; base-uri 'none'; object-src 'none'; form-action 'none'">
 <title>AI教材の動画</title>
 <script>// Google から戻ったアドレスの # 以降（ログインの札）を、ほかの台本より先に取り出してアドレスから消す。
 // 消さないと、履歴・画面のアドレス欄に札が残る。取り出した値は app.js が合言葉（state）と照らしてから使う
@@ -148,6 +148,18 @@ video { display: block; width: 100%; height: 100%; border-radius: 12px; backgrou
         <button class="v" type="button" data-video="SAFETY"><span class="no" aria-hidden="true">2</span><span class="tt"><b>AI利活用 安全ガイド</b><small data-hint="SAFETY" aria-live="polite">約11分</small></span><span class="go" aria-hidden="true">▶</span></button>
         <div class="st" data-status="SAFETY" role="status" aria-live="polite" hidden></div>
       </div>
+      <div class="row" data-row="GEMINI">
+        <button class="v" type="button" data-video="GEMINI"><span class="no" aria-hidden="true">3</span><span class="tt"><b>Gemini はじめての使い方</b><small data-hint="GEMINI" aria-live="polite">約1分40秒・字幕つき</small></span><span class="go" aria-hidden="true">▶</span></button>
+        <div class="st" data-status="GEMINI" role="status" aria-live="polite" hidden></div>
+      </div>
+      <div class="row" data-row="CANVAS">
+        <button class="v" type="button" data-video="CANVAS"><span class="no" aria-hidden="true">4</span><span class="tt"><b>Gemini Canvas で<br>資料からアプリまで</b><small data-hint="CANVAS" aria-live="polite">約3分40秒・字幕つき</small></span><span class="go" aria-hidden="true">▶</span></button>
+        <div class="st" data-status="CANVAS" role="status" aria-live="polite" hidden></div>
+      </div>
+      <div class="row" data-row="NOTEBOOK">
+        <button class="v" type="button" data-video="NOTEBOOK"><span class="no" aria-hidden="true">5</span><span class="tt"><b>Gemini Notebook はじめて</b><small data-hint="NOTEBOOK" aria-live="polite">約3分10秒・字幕つき</small></span><span class="go" aria-hidden="true">▶</span></button>
+        <div class="st" data-status="NOTEBOOK" role="status" aria-live="polite" hidden></div>
+      </div>
     </nav>
 
     <div id="stage" class="stage idle">
@@ -171,7 +183,7 @@ video { display: block; width: 100%; height: 100%; border-radius: 12px; backgrou
     <summary>使い方と、うまく見られないとき</summary>
     <ol>
       <li>見たい動画を押します。押した所に「読み込み中…」と出て、数秒で再生が始まります。</li>
-      <li>字幕は動画の下のボタンで消せます。止める・進める・全画面は、動画の中のボタンで行います。スマホで字幕が小さいときは全画面にしてください。</li>
+      <li>1・2 の字幕は動画の下のボタンで消せます（3〜5 は字幕が絵の中にあり、音はありません）。止める・進める・全画面は、動画の中のボタンで行います。スマホで字幕が小さいときは全画面にしてください。</li>
       <li>進まないときは、出てきた「やり直す」を押してください。止まった所から続きます。</li>
       <li>「見られません」と出たら、会社のアカウントを選び直してください。</li>
     </ol>
@@ -203,9 +215,9 @@ video { display: block; width: 100%; height: 100%; border-radius: 12px; backgrou
 //   合言葉の頭（video-）を見て、札に触らずこの画面へ渡す（戻り先の登録を増やさないため）。
 (function () {
   'use strict';
-  var WEB_BUILD = 'video-web-2026-11-05a';
+  var WEB_BUILD = 'video-web-2026-11-27a';
   var cfg = window.AI_GUIDE_CONFIG || {};
-  var TITLES = { BEGINNER: 'はじめてのAI', SAFETY: 'AI利活用 安全ガイド' };
+  var TITLES = { BEGINNER: 'はじめてのAI', SAFETY: 'AI利活用 安全ガイド', GEMINI: 'Gemini はじめての使い方', CANVAS: 'Gemini Canvas で 資料からアプリまで', NOTEBOOK: 'Gemini Notebook はじめて' };
   var TOKEN_KEY = 'video_token_v1';            // { t: 札, exp: 期限 }
   var STATE_KEY = 'video_oauth_state_v1';      // [{ s: 合言葉, t: 出した時刻, v: 動画, at: 位置 }]
   var STATE_MAX_AGE = 10 * 60 * 1000;          // 合言葉は10分・1回限り
